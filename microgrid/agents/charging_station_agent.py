@@ -1,5 +1,5 @@
 import datetime
-from microgrid.environments.charging_station.charging_station import ChargingStationEnv
+from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 
 
 class ChargingStationAgent:
@@ -17,10 +17,18 @@ if __name__ == "__main__":
     evs_config = [
         {
             'capacity': 50,
-            'pmax': 7,
+            'pmax': 3,
+        },
+        {
+            'capacity': 50,
+            'pmax': 22,
         }
     ]
-    env = ChargingStationEnv(evs_config=evs_config, nb_pdt=N)
+    station_config = {
+        'pmax': 40,
+        'evs_config': evs_config
+    }
+    env = ChargingStationEnv(station_config=station_config, nb_pdt=N)
     agent = ChargingStationAgent(env)
     cumulative_reward = 0
     now = datetime.datetime.now()
