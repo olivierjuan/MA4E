@@ -1,9 +1,9 @@
 import datetime
-from microgrid.environments.industrial.industrial_env import IndustrialEnv
+from microgrid.environments.data_center.data_center_env import DataCenterEnv
 
 
-class IndustrialAgent:
-    def __init__(self, env: IndustrialEnv):
+class DataCenterAgent:
+    def __init__(self, env: DataCenterEnv):
         self.env = env
 
     def take_decision(self,
@@ -18,18 +18,11 @@ if __name__ == "__main__":
     delta_t = datetime.timedelta(minutes=30)
     time_horizon = datetime.timedelta(days=1)
     N = time_horizon // delta_t
-    industrial_config = {
-        'battery': {
-            'capacity': 100,
-            'efficiency': 0.95,
-            'pmax': 25,
-        },
-        'building': {
-            'site': 1,
-        }
+    data_center_config = {
+        'scenario': 10,
     }
-    env = IndustrialEnv(industrial_config=industrial_config, nb_pdt=N)
-    agent = IndustrialAgent(env)
+    env = DataCenterEnv(data_center_config, nb_pdt=N)
+    agent = DataCenterAgent(env)
     cumulative_reward = 0
     now = datetime.datetime.now()
     state = env.reset(now, delta_t)

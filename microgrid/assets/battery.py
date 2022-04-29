@@ -30,7 +30,7 @@ class Battery:
             return power * self.efficiency
         return power / self.efficiency
 
-    def check_power(self, power, delta_t=datetime.timedelta(minutes=15)):
+    def check_power(self, power, delta_t=datetime.timedelta(minutes=30)):
         state = BatteryState.OK
         H = datetime.timedelta(hours=1)
         effective_power = power
@@ -51,7 +51,7 @@ class Battery:
             effective_power = max(effective_power, ac_pmin)
         return effective_power, state
 
-    def charge(self, power, delta_t=datetime.timedelta(minutes=15)):
+    def charge(self, power, delta_t=datetime.timedelta(minutes=30)):
         effective_power, state = self.check_power(power, delta_t)
         H = datetime.timedelta(hours=1)
         self.soc += self.power_with_efficiency(effective_power) * (delta_t / H)

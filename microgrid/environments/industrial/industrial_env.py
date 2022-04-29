@@ -12,12 +12,12 @@ from microgrid.assets.building import Building
 
 
 class IndustrialEnv(gym.Env):
-    def __init__(self, battery_config: dict, building_config: dict, nb_pdt=24, seed: Optional[int] = None):
-        self.battery_config = battery_config
-        self.building_config = building_config
+    def __init__(self, industrial_config: dict, nb_pdt=24, seed: Optional[int] = None):
+        self.battery_config = industrial_config['battery']
+        self.building_config = industrial_config['building']
         self.nb_pdt = nb_pdt
-        self.battery = Battery(**battery_config)
-        self.building = Building(**building_config)
+        self.battery = Battery(**self.battery_config)
+        self.building = Building(**self.building_config)
 
         self.observation_space = spaces.Dict(
             {
@@ -30,7 +30,6 @@ class IndustrialEnv(gym.Env):
         self.action_space = spaces.Box(low=-self.battery.pmax, high=self.battery.pmax, shape=(nb_pdt,))
         self.now = None
         self.delta_t = None
-        self.n_coord_step = None
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
         soc, effective_power, penalties = self.battery.charge(action[0], delta_t=self.delta_t)

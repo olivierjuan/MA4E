@@ -24,11 +24,13 @@ class EV:
 
     def get_is_plugged(self, when: datetime.datetime, start: datetime.datetime):
         delta_day = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(days=1)
-        delta_hour = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(hours=1)
+        delta_hour = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
         day = (self.day + delta_day - 1) % 365 + 1
         date = datetime.date(year=2014, month=1, day=1) + datetime.timedelta(days=day)
-        dep, arr = tuple(self.data.query(f'day == "{date:%d/%m/%Y}" and ev_id == {self.ev}')[['time_slot_dep', 'time_slot_arr']].values[0])
-        delta_hour = delta_hour % 24
+        __a = self.data.loc[self.data['day'] == f'{date:%d/%m/%Y}']
+        __b = __a.loc[__a['ev_id'] == self.ev, ['time_slot_dep', 'time_slot_arr']]
+        dep, arr = tuple(__b.values[0])
+        delta_hour = delta_hour % 48
         if dep <= delta_hour < arr:
             return 0
         return 1
@@ -38,15 +40,15 @@ class EV:
         if len(datetimes) > 0:
             start = datetimes[0]
             res = np.array(list(map(lambda x: self.get_is_plugged(x, start), datetimes)))
-            pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(days=15)
-            if pdt == 24*4-1:
+            pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(days=30)
+            if pdt == 24*2-1:
                 self.day = self.day % 365 + 1
         return res
 
-    def check_power(self, power, delta_t=datetime.timedelta(minutes=15)):
+    def check_power(self, power, delta_t=datetime.timedelta(minutes=30)):
         return self.battery.check_power(power, delta_t)
 
-    def charge(self, power, delta_t=datetime.timedelta(minutes=15)):
+    def charge(self, power, delta_t=datetime.timedelta(minutes=30)):
         return self.battery.charge(power, delta_t)
 
     def get_soc(self, when: datetime.datetime):
@@ -58,5 +60,7 @@ class EV:
 if __name__ == '__main__':
     b = EV(ev=1)
     print(b.data)
-    print(b.get_is_plugged(datetime.datetime.now(), datetime.datetime.now()))
-    print(b.get_is_plugged_prevision([datetime.datetime.now(), datetime.datetime.now()+datetime.timedelta(minutes=15)]))
+    now = datetime.datetime.now()
+    dt = datetime.timedelta(minutes=30)
+    print(b.get_is_plugged(now, now))
+    print(b.get_is_plugged_prevision([now + i * dt for i in range(48)]))

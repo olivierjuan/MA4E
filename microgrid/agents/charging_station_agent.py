@@ -6,12 +6,16 @@ class ChargingStationAgent:
     def __init__(self, env: ChargingStationEnv):
         self.env = env
 
-    def take_decision(self, state):
+    def take_decision(self,
+                      state,
+                      previous_state=None,
+                      previous_action=None,
+                      previous_reward=None):
         return self.env.action_space.sample()
 
 
 if __name__ == "__main__":
-    delta_t = datetime.timedelta(minutes=15)
+    delta_t = datetime.timedelta(minutes=30)
     time_horizon = datetime.timedelta(days=1)
     N = time_horizon // delta_t
     evs_config = [

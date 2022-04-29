@@ -19,24 +19,30 @@ class Building:
         self.scenario = randint(1, 30)
 
     def get_power(self, when: datetime.datetime, start: datetime.datetime):
-        pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
+        pdt = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30) + 1
         scenario = self.scenario
-        if pdt == 48:
-            scenario = scenario % 30 + 1
-        return self.data.query(f'site_id == {self.site} and scenario == {scenario} and time_slot == {pdt % 48 + 1}')['cons (kW)'].values[0]
+        if pdt == 49:
+            scenario = scenario % 31 + 1
+            pdt = pdt % 49 + 1
+        __a = self.data.loc[self.data['site_id'] == self.site]
+        __b = __a.loc[__a['scenario'] == scenario]
+        __c = __b.loc[__b['time_slot'] == pdt, ['cons (kW)']]
+        return __c.values[0][0]
 
     def get_conso_prevision(self, datetimes: [datetime.datetime]):
         res = []
         if len(datetimes) > 0:
             start = datetimes[0]
             res = np.array(list(map(lambda x: self.get_power(x, start), datetimes)))
-            pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=15)
-            if pdt == 24*4-1:
-                self.scenario = self.scenario % 30 + 1
+            pdt = (start - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(minutes=30)
+            if pdt == 24*2-1:
+                self.scenario = self.scenario % 31 + 1
         return res
 
 
 if __name__ == '__main__':
     b = Building(site=1)
-    print(b.get_power(datetime.datetime.now()))
-    print(b.get_conso_prevision([datetime.datetime.now(), datetime.datetime.now()+datetime.timedelta(minutes=15)]))
+    now = datetime.datetime.now()
+    dt = datetime.timedelta(minutes=30)
+    print(b.get_power(now, now))
+    print(b.get_conso_prevision([now + i * dt for i in range(48)]))

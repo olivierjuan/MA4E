@@ -16,7 +16,7 @@ from microgrid.assets.ev import EV
 class ChargingStationEnv(gym.Env):
     def __init__(self, station_config: dict, nb_pdt=24, seed: Optional[int] = None):
         self.station_config = station_config
-        self.evs_config = station_config['evs_config']
+        self.evs_config = station_config['evs']
         self.nb_pdt = nb_pdt
         self.nb_evs = len(self.evs_config)
         self.evs = [EV(**ev_config) for ev_config in self.evs_config]
@@ -40,23 +40,23 @@ class ChargingStationEnv(gym.Env):
         self.n_coord_step = None
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
-        effective_powers = []
+        effective_powers = action.copy()
         penalties = []
         socs = []
-        for ev, action_ev in zip(self.evs, action[0, :]):
+        for i, (ev, action_ev) in enumerate(zip(self.evs, action[:, 0])):
             soc, effective_power, penalty = ev.charge(action_ev, delta_t=self.delta_t)
             socs.append(soc)
-            effective_powers.append(effective_power)
+            effective_powers[0, i] = effective_power
             penalties.append(penalty)
         self.now += self.delta_t
         return self._step_common(effective_powers, penalties)
 
     def try_step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
-        effective_powers = []
+        effective_powers = action.copy()
         penalties = []
-        for ev, action_ev in zip(self.evs, action[0, :]):
+        for i, (ev, action_ev) in enumerate(zip(self.evs, action[:, 0])):
             effective_power, penalty = ev.check_power(action_ev, delta_t=self.delta_t)
-            effective_powers.append(effective_power)
+            effective_powers[0, i] = effective_power
             penalties.append(penalty)
         return self._step_common(effective_powers, penalties)
 
@@ -86,7 +86,7 @@ class ChargingStationEnv(gym.Env):
         return state
 
     def get_consumption(self, _: ObsType,  action: ActType) -> np.ndarray:
-        return action.sum(axis=0)
+        return np.array(action).sum(axis=0)
 
     def render(self, mode="human"):
         pass

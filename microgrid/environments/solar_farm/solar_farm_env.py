@@ -12,12 +12,12 @@ from microgrid.assets.pv import PV
 
 
 class SolarFarmEnv(gym.Env):
-    def __init__(self, battery_config: dict, pv_config: dict, nb_pdt=24, seed: Optional[int] = None):
-        self.battery_config = battery_config
-        self.pv_config = pv_config
+    def __init__(self, solar_farm_config: dict, nb_pdt=24, seed: Optional[int] = None):
+        self.battery_config = solar_farm_config.get('battery', {})
+        self.pv_config = solar_farm_config.get('pv', {})
         self.nb_pdt = nb_pdt
-        self.battery = Battery(**battery_config)
-        self.pv = PV(**pv_config)
+        self.battery = Battery(**self.battery_config)
+        self.pv = PV(**self.pv_config)
 
         self.observation_space = spaces.Dict(
             {
@@ -30,18 +30,21 @@ class SolarFarmEnv(gym.Env):
         self.action_space = spaces.Box(low=self.battery.pmin, high=self.battery.pmax, shape=(nb_pdt,))
         self.now = None
         self.delta_t = None
-        self.n_coord_step = None
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
         soc, effective_power, penalties = self.battery.charge(action[0], delta_t=self.delta_t)
         self.now += self.delta_t
-        return self._step_common(effective_power, penalties)
+        effective_action = action[:]
+        effective_action[0] = effective_power
+        return self._step_common(effective_action, penalties)
 
     def try_step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
         effective_power, penalties = self.battery.check_power(action[0], delta_t=self.delta_t)
-        return self._step_common(effective_power, penalties)
+        effective_action = action[:]
+        effective_action[0] = effective_power
+        return self._step_common(effective_action, penalties)
 
-    def _step_common(self, effective_power, penalties) -> Tuple[ObsType, float, bool, dict]:
+    def _step_common(self, effective_action, penalties) -> Tuple[ObsType, float, bool, dict]:
         state = {
             'datetime': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
@@ -49,7 +52,7 @@ class SolarFarmEnv(gym.Env):
             'pv_prevision': self.pv.get_pv_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         reward = 0 if penalties == BatteryState.OK else -1e5
-        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_power, 'soc': self.battery.soc, 'datetime': self.now}
+        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_action, 'soc': self.battery.soc, 'datetime': self.now}
 
     def reset(self, *args, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None)\
             -> Union[ObsType, Tuple[ObsType, dict]]:
