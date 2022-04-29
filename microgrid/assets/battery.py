@@ -11,6 +11,7 @@ class BatteryState(enum.IntEnum):
     OVERCHARGED = 1
     UNDERCHARGED = 2
     OVERPOWERED = 4
+    PMAX_EXCEEDED = 8
 
 
 class Battery:

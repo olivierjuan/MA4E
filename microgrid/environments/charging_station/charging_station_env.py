@@ -46,8 +46,14 @@ class ChargingStationEnv(gym.Env):
         for i, (ev, action_ev) in enumerate(zip(self.evs, action[:, 0])):
             soc, effective_power, penalty = ev.charge(action_ev, delta_t=self.delta_t)
             socs.append(soc)
-            effective_powers[0, i] = effective_power
+            effective_powers[i, 0] = effective_power
             penalties.append(penalty)
+        total_effective_powers = effective_powers[:, 0].sum()
+        if total_effective_powers > self.pmax_site:
+            penalties.append(BatteryState.PMAX_EXCEEDED)
+            effective_powers[:, 0] = effective_powers[:, 0] * (self.pmax_site / total_effective_powers)
+        else:
+            penalties.append(BatteryState.OK)
         self.now += self.delta_t
         return self._step_common(effective_powers, penalties)
 
@@ -56,8 +62,14 @@ class ChargingStationEnv(gym.Env):
         penalties = []
         for i, (ev, action_ev) in enumerate(zip(self.evs, action[:, 0])):
             effective_power, penalty = ev.check_power(action_ev, delta_t=self.delta_t)
-            effective_powers[0, i] = effective_power
+            effective_powers[i, 0] = effective_power
             penalties.append(penalty)
+        total_effective_powers = effective_powers[:, 0].sum()
+        if total_effective_powers > self.pmax_site:
+            penalties.append(BatteryState.PMAX_EXCEEDED)
+            effective_powers[:, 0] = effective_powers[:, 0] * (self.pmax_site / total_effective_powers)
+        else:
+            penalties.append(BatteryState.OK)
         return self._step_common(effective_powers, penalties)
 
     def _step_common(self, effective_powers, penalties) -> Tuple[ObsType, float, bool, dict]:
