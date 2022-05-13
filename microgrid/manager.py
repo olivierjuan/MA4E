@@ -3,11 +3,14 @@ from collections import defaultdict
 
 import numpy as np
 import datetime
+import tqdm
 
 from microgrid.agents.charging_station_agent import ChargingStationAgent
+from microgrid.agents.data_center_agent import DataCenterAgent
 from microgrid.agents.industrial_agent import IndustrialAgent
 from microgrid.agents.solar_farm_agent import SolarFarmAgent
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
+from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from matplotlib import pyplot as plt
@@ -52,7 +55,7 @@ class Manager:
         signal = np.zeros(self.nb_pdt)
         self.data_bank['initial_state'] = copy.deepcopy(agents_data)
         N = self.simulation_horizon // self.delta_t
-        for pdt in range(N):
+        for pdt in tqdm.trange(N):
             now = self.start + pdt * self.delta_t
             # We loop until convergence or max iterations
             agents_data, signal = self.loop(now, agents_data, signal)
@@ -170,7 +173,6 @@ class Manager:
         plt.show()
 
 
-
 class MyManager(Manager):
     def __init__(self, *args, **kwargs):
         Manager.__init__(self, *args, **kwargs)
@@ -204,13 +206,13 @@ class MyManager(Manager):
 
 if __name__ == "__main__":
     delta_t = datetime.timedelta(minutes=30)
-    time_horizon = datetime.timedelta(days=1)
+    time_horizon = datetime.timedelta(days=1) # taille de l'horizon glissant
     N = time_horizon // delta_t
     solar_farm_config = {
         'battery': {
-            'capacity': 100,
+            'capacity': 30,
             'efficiency': 0.95,
-            'pmax': 25,
+            'pmax': 10,
         },
         'pv': {
             'surface': 100,
@@ -224,38 +226,47 @@ if __name__ == "__main__":
         'pmax': 40,
         'evs': [
             {
-                'capacity': 50,
+                'capacity': 40,
+                'pmax': 22,
+            },
+            {
+                'capacity': 40,
+                'pmax': 22,
+            },
+            {
+                'capacity': 40,
                 'pmax': 3,
             },
             {
-                'capacity': 50,
-                'pmax': 22,
-            }
+                'capacity': 40,
+                'pmax': 3,
+            },
         ]
     }
     industrial_config = {
         'battery': {
-            'capacity': 100,
+            'capacity': 60,
             'efficiency': 0.95,
-            'pmax': 25,
+            'pmax': 10,
         },
         'building': {
             'site': 1,
         }
     }
+    data_center_config = {
+        'scenario': 1,
+    }
     agents = {
         'ferme': SolarFarmAgent(SolarFarmEnv(solar_farm_config=solar_farm_config, nb_pdt=N)),
         'evs': ChargingStationAgent(ChargingStationEnv(station_config=station_config, nb_pdt=N)),
         'industrie': IndustrialAgent(IndustrialEnv(industrial_config=industrial_config, nb_pdt=N)),
+        'datacenter': DataCenterAgent(DataCenterEnv(data_center_config=data_center_config, nb_pdt=N)),
     }
     manager = MyManager(agents,
                         delta_t=delta_t,
                         horizon=time_horizon,
-                        simulation_horizon=datetime.timedelta(days=1),
-                        max_iterations=10,
+                        simulation_horizon=datetime.timedelta(hours=12), # durée de la glissade
+                        max_iterations=10, # nombre d'iterations de convergence des prix
                         )
-    manager.init_envs()
     manager.run()
     manager.plots()
-
-    print(manager)
