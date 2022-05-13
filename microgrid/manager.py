@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 class Manager:
     def __init__(self,
                  agents: dict,
-                 start: datetime.datetime = datetime.datetime.now(),
+                 start: datetime.datetime = datetime.datetime(2022, 5, 16, 0, 0, 0, 0),
                  delta_t: datetime.timedelta = datetime.timedelta(minutes=30),
                  horizon: datetime.timedelta = datetime.timedelta(days=1),
                  simulation_horizon: datetime.timedelta = datetime.timedelta(days=1),
