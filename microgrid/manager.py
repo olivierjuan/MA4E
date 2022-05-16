@@ -172,6 +172,8 @@ class Manager:
         plt.legend()
         plt.show()
 
+    def generate_summary_ppt(self):
+
 
 class MyManager(Manager):
     def __init__(self, *args, **kwargs):
