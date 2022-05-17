@@ -135,14 +135,17 @@ class PptSynthesis():
         serious game
 
         :param pv_prof: PV prod. profile
-        :param load_profiles: dictionary with keys 1. microgrid team name;
-        2. Iteration; 3. actor type (N.B. charging_station_1, charging_station_2...
+        :param load_profiles: dictionary with keys 1. Industrial Cons. scenario;
+        2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name;
+        6. Iteration; 7. actor type (N.B. charging_station_1, charging_station_2...
         if multiple charging stations in this microgrid) and values the associated
         load profile (kW)
-        :param microgrid_prof: dict. with keys 1. microgrid team name;
-        2. Iteration and value the associated aggreg. microgrid load profile
-        :param microgrid_pmax: dict. with keys 1. microgrid team name;
-        2. Iteration and value the associated microgrid pmax
+        :param microgrid_prof: dict. with keys 1. Industrial Cons. scenario;
+        2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name;
+        6. Iteration and value the associated aggreg. microgrid load profile
+        :param microgrid_pmax: dict. with keys 1. Industrial Cons. scenario;
+        2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name;
+        6. Iteration and value the associated microgrid pmax
         :param cost_autonomy_tradeoff: dict. with keys 1. the team names; 2. PV region
         names and values the associated (cost, autonomy score) aggreg. over the set
         of other scenarios
@@ -155,12 +158,6 @@ class PptSynthesis():
         """
 
         region_coord_dyn_plot = None # if None the first region will be used
-
-        # update dict. to fit with the multiple scenarios case
-        fixed_scenario = (1, 1, "grand_nord", 1)
-        load_profiles = set_to_multiple_scenarios_format(dict_wo_scenarios=load_profiles, fixed_scenario=fixed_scenario)
-        microgrid_prof = set_to_multiple_scenarios_format(dict_wo_scenarios=microgrid_prof, fixed_scenario=fixed_scenario)
-        microgrid_pmax = set_to_multiple_scenarios_format(dict_wo_scenarios=microgrid_pmax, fixed_scenario=fixed_scenario)
 
         # create an empty presentation
         self.prs = Presentation()
@@ -186,7 +183,7 @@ class PptSynthesis():
             team = team_names[i_team]
             slide, shapes, title_shape = \
                 init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX,
-                                          f"Team {team} load DURING {coord_method} \n (PV) region: {region_coord_dyn_plot}",
+                                          f"Team {team} load DURING {self.coord_method} \n (PV) region: {region_coord_dyn_plot}",
                                           FONT_STYLE["name"], FONT_STYLE["size"], FONT_STYLE["bold"], FONT_STYLE["italic"],
                                           TEXT_VERTICAL_ALIGN)
 
@@ -218,11 +215,11 @@ class PptSynthesis():
                                           TEXT_VERTICAL_ALIGN)
 
             # plot and save
-            per_actor_load_file = os.path.join(result_dir,
+            per_actor_load_file = os.path.join(self.result_dir,
                                                f"per_actor_load_last_iter_team_{team}_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
             plot_per_actor_load_last_iter(load_profiles, pv_prof, region_coord_dyn_plot,
                                           team, per_actor_load_file.split(".")[0],
-                                          optim_period)
+                                          self.optim_period)
             # open as Pillow Image
             per_actor_load_img = Image.open(per_actor_load_file)
 
@@ -242,7 +239,7 @@ class PptSynthesis():
                                       TEXT_VERTICAL_ALIGN)
 
         # plot and save
-        all_teams_mg_load_file = os.path.join(result_dir,
+        all_teams_mg_load_file = os.path.join(self.result_dir,
                                               f"all_teams_mg_load_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
         plot_all_teams_mg_load_last_iter(microgrid_prof, microgrid_pmax, pv_prof, region_coord_dyn_plot,
                                          all_teams_mg_load_file.split(".")[0], self.optim_period)
@@ -265,7 +262,7 @@ class PptSynthesis():
 
         # plot and save
         all_teams_cost_auton_tradeoff_file = \
-                os.path.join(result_dir, f"all_teams_cost_auton_tradeoff_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
+                os.path.join(self.result_dir, f"all_teams_cost_auton_tradeoff_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
 
         plot_all_teams_cost_auton_tradeoff_last_iter(cost_autonomy_tradeoff,
                                                      all_teams_cost_auton_tradeoff_file.split(".")[0])
@@ -292,7 +289,7 @@ class PptSynthesis():
                                       FONT_STYLE["bold"], FONT_STYLE["italic"], TEXT_VERTICAL_ALIGN)
 
         # add sized image to current slide
-        img_file = os.path.join(result_dir, f"best_team_per_region_{date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
+        img_file = os.path.join(self.result_dir, f"best_team_per_region_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
         self.add_sized_img_to_slide(slide=slide, img=regions_map_img, img_file=img_file, title_shape=title_shape)
 
         # suppress unused text placeholder (of index 1, 0 is used for the title)
@@ -380,7 +377,7 @@ class PptSynthesis():
             suppress_unused_text_placeholders(shapes)
 
         # save the pptx JDP presentation
-        self.prs.save(os.path.join(result_dir, f"run_summary_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.pptx"))
+        self.prs.save(os.path.join(self.result_dir, f"run_summary_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.pptx"))
 
     def create_best_team_per_region_img(self, best_teams_per_region: dict) -> Image:
         """

@@ -37,8 +37,8 @@ team_colors = {0: "blue", 1: "orange", 2: "green", 3: "red", 4: "purple",
                5: "brown", 6: "pink", 7: "gray", 8: "olive", 9: "cyan", 10: "black"}
 team_markers = {0: "o", 1: "v", 2: "^", 3: "<", 4: ">", 5: "1", 6: "s", 7: "p", 
                 8: "*", 9: "d", 10: "x"}
-actor_colors = {"solar_farm": "orange", "industrial_consumer": "gray",
-                "charging_station": "blue", "data_center": "red"}
+actor_colors = {"ferme": "orange", "industrie": "gray",
+                "evs": "blue", "datacenter": "red"}
 n_colors = len(team_colors)
 n_markers = len(team_markers)
 

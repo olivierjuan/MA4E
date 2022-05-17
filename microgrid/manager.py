@@ -1,3 +1,4 @@
+import os
 import copy
 from collections import defaultdict
 
@@ -14,6 +15,9 @@ from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from matplotlib import pyplot as plt
+from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
+from calc_output_metrics import calc_microgrid_collective_metrics,  calc_cost_autonomy_tradeoff_last_iter, \
+    calc_per_actor_bills, get_best_team_per_region, get_improvement_traj
 
 
 class Manager:
@@ -172,7 +176,72 @@ class Manager:
         plt.legend()
         plt.show()
 
+
     def generate_summary_ppt(self):
+        mg_team_name = "champions"
+        iter_idx = 1
+        dates = list(sorted(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
+        agents = list(filter(lambda x: not x.startswith('__'), self.data_bank[dates[0]].keys()))
+        pv_prof = [self.data_bank[date]['ferme']['state']['pv_prevision'][0] for date in dates]
+        load_profiles = {mg_team_name:
+                             {iter_idx: {agent: np.array([self.data_bank[date][agent]['consumption'][0] for date in dates])
+                                         for agent in agents
+                                         }
+                              }
+                         }
+        # update dict. to fit with the multiple scenarios case
+        fixed_scenario = (1, 1, "grand_nord", 1)
+        load_profiles = set_to_multiple_scenarios_format(dict_wo_scenarios=load_profiles, fixed_scenario=fixed_scenario)
+
+        # calculate microgrid profile, max power and collective metrics
+        contracted_p_tariffs = {6: 123.6, 9: 151.32, 12: 177.24, 15: 201.36,
+                                18: 223.68, 24: 274.68, 30: 299.52, 36: 337.56}
+
+        # calculate per-actor bill
+        purchase_price = 0.10 + 0.1 * np.random.rand(len(dates))
+        sale_price = 0.05 + 0.1 * np.random.rand(len(dates))
+
+        delta_t_s = self.delta_t.total_seconds()
+        per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
+                                               sale_price=sale_price, delta_t_s=delta_t_s)
+
+        microgrid_prof, microgrid_pmax, collective_metrics = \
+            calc_microgrid_collective_metrics(load_profiles=load_profiles, contracted_p_tariffs=contracted_p_tariffs,
+                                              delta_t_s=delta_t_s)
+
+        # calculate cost, autonomy tradeoff
+        cost_autonomy_tradeoff = calc_cost_autonomy_tradeoff_last_iter(per_actor_bills=per_actor_bills,
+                                                                       collective_metrics=collective_metrics)
+
+        # Get best team per region
+        coll_metrics_weights = {"pmax_cost": 1 / 365, "autonomy_score": 1,
+                                "mg_transfo_aging": 0, "n_disj": 0}
+        team_scores, best_teams_per_region, coll_metrics_names = \
+            get_best_team_per_region(per_actor_bills=per_actor_bills, collective_metrics=collective_metrics,
+                                     coll_metrics_weights=coll_metrics_weights)
+
+        current_dir = os.getcwd()
+        result_dir = os.path.join(current_dir, "run_synthesis")
+        date_of_run = datetime.datetime.now()
+        idx_run = 1
+        coord_method = "price_decomposition"
+        regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
+
+        ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
+                                     optim_period=dates, coord_method=coord_method,
+                                     regions_map_file=regions_map_file)
+
+        # get "improvement trajectory"
+        list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \
+                             for elt in os.listdir(os.path.join(current_dir, "run_synthesis")) \
+                             if (os.path.isdir(elt) and elt.startswith("run_"))]
+        scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
+                                           list(team_scores))
+
+        ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
+                                                microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
+                                                cost_autonomy_tradeoff=cost_autonomy_tradeoff, team_scores=team_scores,
+                                                best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
 
 
 class MyManager(Manager):
@@ -272,3 +341,4 @@ if __name__ == "__main__":
                         )
     manager.run()
     manager.plots()
+    manager.generate_summary_ppt()
