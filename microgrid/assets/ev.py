@@ -12,7 +12,7 @@ class EV:
     def random():
         return EV(ev=randint(1, 10), day=randint(1, 365))
 
-    def __init__(self, ev=1, day=1, capacity=50, pmax=7, pmin=0):
+    def __init__(self, ev=1, day=1, capacity=50, pmax=7, pmin=None):
         self.ev = ev
         self.day = day
         self.battery = Battery(capacity=capacity, pmax=pmax, pmin=pmin)
