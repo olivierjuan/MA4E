@@ -1,5 +1,8 @@
-from calc_output_metrics import calc_per_actor_bills, calc_microgrid_collective_metrics, \
-    calc_two_metrics_tradeoff_last_iter, get_best_team_per_region, get_improvement_traj
+import copy
+
+from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
+    calc_per_actor_bills, calc_microgrid_collective_metrics,  calc_two_metrics_tradeoff_last_iter, \
+    get_best_team_per_region, get_improvement_traj
 
 if __name__ =="__main__":
     import os
@@ -38,9 +41,10 @@ if __name__ =="__main__":
     n_t = len(load_profiles[1][1]["grand_nord"][1]["champions"][1]["ferme"])
     purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
     sale_price = 0.05 + 0.1 * np.random.rand(n_t)
+    mg_price_signal = np.random.rand(n_t)
 
     per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
-                                           sale_price=sale_price, delta_t_s=delta_t_s)
+                                           sale_price=sale_price, mg_price_signal=mg_price_signal, delta_t_s=delta_t_s)
 
     microgrid_prof, microgrid_pmax, collective_metrics = \
         calc_microgrid_collective_metrics(load_profiles=load_profiles, contracted_p_tariffs=contracted_p_tariffs,
@@ -48,13 +52,24 @@ if __name__ =="__main__":
 
     # calculate cost, autonomy tradeoff
     aggreg_operations = {"cost": sum, "autonomy_score": np.mean}
-    cost_autonomy_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills,
+    # get external (real) bills
+    per_actor_bills_external = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                     last_level_selected_keys=["external"])
+    per_actor_bills_external = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_external,
+                                                                    last_key="external")
+    # and the internal ones, used for coord. into the microgrid
+    per_actor_bills_internal = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                     last_level_selected_keys=["internal"])
+    per_actor_bills_internal = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_internal,
+                                                                    last_key="internal")
+
+    cost_autonomy_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
                                                                  collective_metrics=collective_metrics, metric_1="cost",
                                                                  metric_2="autonomy_score", aggreg_operations=aggreg_operations)
 
     # calculate cost, CO2 emissions tradeoff
     aggreg_operations = {"cost": sum, "co2_emis": np.mean}
-    cost_co2emis_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills,
+    cost_co2emis_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
                                                                 collective_metrics=collective_metrics, metric_1="cost",
                                                                 metric_2="co2_emis", aggreg_operations=aggreg_operations)
 
@@ -62,7 +77,7 @@ if __name__ =="__main__":
     coll_metrics_weights = {"pmax_cost": 1 / 365, "autonomy_score": 1,
                             "mg_transfo_aging": 0, "n_disj": 0, "co2_emis": 1}
     team_scores, best_teams_per_region, coll_metrics_names = \
-        get_best_team_per_region(per_actor_bills=per_actor_bills, collective_metrics=collective_metrics,
+        get_best_team_per_region(per_actor_bills=per_actor_bills_external, collective_metrics=collective_metrics,
                                  coll_metrics_weights=coll_metrics_weights)
 
     current_dir = os.getcwd()

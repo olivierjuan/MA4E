@@ -201,6 +201,8 @@ class Manager:
 
         # calculate per-actor bill
         n_t = len(dates)
+        # TODO: update signal from run
+        signal = np.random.rand(n_t)
         purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
         sale_price = 0.05 + 0.1 * np.random.rand(n_t)
 

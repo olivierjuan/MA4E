@@ -18,8 +18,33 @@ import datetime
 # Q2OJ : quid si plantage dans le run d'une equipe -> sortie ?
 # Qui verifie que les formats des profils de charge sont bons? (taille/type)
 # ATTENTION Puissance dans "load" ?
+
+def subselec_dict_based_on_lastlevel_keys(my_dict: dict, last_level_selected_keys: list) -> dict:
+    return {key: subselec_dict_based_on_lastlevel_keys(my_dict[key], last_level_selected_keys) if isinstance(my_dict[key], dict) \
+            else my_dict[key] for key in my_dict if isinstance(my_dict[key], dict) or key in last_level_selected_keys}
+
+
+def suppress_last_key_in_per_actor_bills(per_actor_bills: dict, last_key: str) -> dict:
+    return {ic_scen:
+                {dc_scen:
+                     {pv_scen:
+                          {ev_scen:
+                               {mg_name:
+                                    {i_iter:
+                                         {actor_name:
+                    per_actor_bills[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter][actor_name][last_key] \
+                for actor_name in per_actor_bills[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter]}
+                for i_iter in per_actor_bills[ic_scen][dc_scen][pv_scen][ev_scen][mg_name]}
+                for mg_name in per_actor_bills[ic_scen][dc_scen][pv_scen][ev_scen]}
+                for ev_scen in per_actor_bills[ic_scen][dc_scen][pv_scen]}
+                for pv_scen in per_actor_bills[ic_scen][dc_scen]}
+                for dc_scen in per_actor_bills[ic_scen]}
+                for ic_scen in per_actor_bills
+            }
+
+
 def calc_per_actor_bills(load_profiles: dict, purchase_price: np.ndarray,
-                         sale_price: np.ndarray, delta_t_s: int) -> dict:
+                         sale_price: np.ndarray, mg_price_signal: np.ndarray, delta_t_s: int) -> dict:
     """
     Calculate per actor bill
     
@@ -30,6 +55,7 @@ def calc_per_actor_bills(load_profiles: dict, purchase_price: np.ndarray,
     load profile (kW)
     :param purchase_price: elec. purchase price in €/kWh (>= 0)
     :param sale_price: elec. sale price in €/kWh (>= 0)
+    :param mg_price_signal: internal microgrid price signal, sent by the coordinator
     :param delta_t_s: time-slot duration of the considered discrete time model
     :return: returns a dictionary with the same keys as load_profiles and values
     the associated bills
@@ -64,12 +90,19 @@ def calc_per_actor_bills(load_profiles: dict, purchase_price: np.ndarray,
                             # Loop over actors of the current microgrid team
                             for actor_name in load_profiles[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter]:
                                 per_actor_bills[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter][actor_name] \
-                                   = calculate_bill(load_profiles[ic_scen][dc_scen] \
+                                   = {"internal":
+                                          calculate_internal_bill(load_profile=load_profiles[ic_scen][dc_scen] \
                                                     [pv_scen][ev_scen][mg_name][i_iter] \
-                                                    [actor_name], purchase_price,
-                                                    sale_price, delta_t_s)
+                                                    [actor_name], price_signal=mg_price_signal, delta_t_s=delta_t_s),
+                                      "external":
+                                          calculate_bill(load_profile=load_profiles[ic_scen][dc_scen] \
+                                                    [pv_scen][ev_scen][mg_name][i_iter] \
+                                                    [actor_name], purchase_price=purchase_price,
+                                                    sale_price=sale_price, delta_t_s=delta_t_s)
+                                      }
     
     return per_actor_bills
+
 
 def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs: dict, emission_rates: np.ndarray,
                                       delta_t_s: int) -> dict:
@@ -155,13 +188,23 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
                                                                      delta_t_s=delta_t_s, emission_rates=emission_rates)}
     
     return microgrid_prof, microgrid_pmax, collective_metrics
-    
+
+
 def calculate_bill(load_profile: np.ndarray, purchase_price: np.ndarray,
                    sale_price: np.ndarray, delta_t_s: int) -> float:
     
     return delta_t_s/3600 * sum(np.maximum(load_profile, 0) * purchase_price \
                                     + np.minimum(load_profile, 0) * sale_price)
-        
+
+
+def calculate_internal_bill(load_profile: np.ndarray, price_signal: np.ndarray, delta_t_s: int) -> float:
+    """
+    Calculate internal (to the microgrid) bill based on the (price) signal sent by the microgrid coordinator
+    """
+
+    return delta_t_s / 3600 * sum(load_profile * price_signal)
+
+
 def calculate_microgrid_profile(per_actor_load_prof: dict) -> np.ndarray:
     """
     Calculate microgrid profile based on per-actor ones
@@ -566,17 +609,16 @@ def calc_two_metrics_tradeoff_last_iter(per_actor_bills: dict, collective_metric
                                       [region][ev_scen][team][last_iter][actor] \
                                         for actor in per_actor_bills[ic_scen][dc_scen] \
                                          [region][ev_scen][team][last_iter]]))
-                        # and autonomy one
+                        # and metric_2 one
                         two_metrics_tradeoff[team][region][metric_2] \
                           .append(collective_metrics[ic_scen][dc_scen] \
                                    [region][ev_scen][team][last_iter][metric_2])
             
-            # aggreg. cost/autonomy score over all (non PV) scenarios
-            two_metrics_tradeoff[team][region][metric_1] = \
-                aggreg_operations[metric_1](two_metrics_tradeoff[team][region][metric_1])
-            two_metrics_tradeoff[team][region][metric_2] = \
-                aggreg_operations[metric_2](two_metrics_tradeoff[team][region][metric_2])
-    
+            # aggreg. metric_1/metric_2 over all (non PV) scenarios
+            for metric in [metric_1, metric_2]:
+                two_metrics_tradeoff[team][region][metric] = \
+                    aggreg_operations[metric](two_metrics_tradeoff[team][region][metric])
+
     return two_metrics_tradeoff
 
 
