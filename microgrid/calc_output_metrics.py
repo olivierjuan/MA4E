@@ -198,11 +198,11 @@ def calculate_pmax_cost(daily_microgrid_prof: np.ndarray,
         return power_thresholds[idx_p_threshold], \
                         contracted_p_tariffs[power_thresholds[idx_p_threshold]]
 
-def calculate_autonomy_score(daily_microgrid_prof: np.ndarray, delta_t_s: int) -> float:
+def calculate_autonomy_score(microgrid_prof: np.ndarray, delta_t_s: int) -> float:
     """
     Calculate autonomy score
     
-    :param daily_microgrid_prof: vector of microgrid daily load profile
+    :param microgrid_prof: vector of microgrid load profile
     :param delta_t_s: time-slot duration of the considered discrete time model
     :return: returns an "autonomy score", which measures how much the microgrid
     is exchanging elec. with the grid
@@ -212,17 +212,24 @@ def calculate_autonomy_score(daily_microgrid_prof: np.ndarray, delta_t_s: int) -
     
     # measure only the "reverse flows", from the microgrid to the elec. network
     if only_reinj_score:
-        return - delta_t_s/3600 * sum(np.minimum(daily_microgrid_prof, 0))
+        return - delta_t_s/3600 * sum(np.minimum(microgrid_prof, 0))
     # measure all exchanges with the elec. network
     else:
-        return delta_t_s/3600 * (sum(np.maximum(daily_microgrid_prof, 0)) \
-                                    - sum(np.minimum(daily_microgrid_prof, 0)))
+        return delta_t_s/3600 * (sum(np.maximum(microgrid_prof, 0)) \
+                                    - sum(np.minimum(microgrid_prof, 0)))
 
-def calculate_transfo_aging(daily_microgrid_prof: np.ndarray, delta_t_s: int) -> float:
+def calculate_co2_emissions(microgrid_prof: np.ndarray, delta_t_s: int, emission_rates: np.ndarray) -> float:
+    """
+    Calculate CO2 emissions, based on the positive part of microgrid consumption profile
+    """
+
+    return delta_t_s/3600 * sum(np.maximum(microgrid_prof, 0) * emission_rates)
+
+def calculate_transfo_aging(microgrid_prof: np.ndarray, delta_t_s: int) -> float:
     """
     Calculate transformer aging
     
-    :param daily_microgrid_prof: vector of microgrid daily load profile
+    :param daily_microgrid_prof: vector of microgrid load profile
     :param delta_t_s: time-slot duration of the considered discrete time model
     :return: returns transformer aging
     """
