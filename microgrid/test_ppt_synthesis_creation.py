@@ -65,11 +65,12 @@ if __name__ =="__main__":
     regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
 
     from create_ppt_summary_of_run import PptSynthesis
+    import pandas as pd
     init_date = datetime.datetime(2022,5,17)
     dates = [init_date + datetime.timedelta(seconds=i*delta_t_s) for i in range(n_t)]
     ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
-                                 optim_period=dates, coord_method=coord_method,
-                                 regions_map_file=regions_map_file)
+                                 optim_period=pd.date_range(dates[0], dates[-1], freq=f"{delta_t_s}s"),
+                                 coord_method=coord_method, regions_map_file=regions_map_file)
 
     # get "improvement trajectory"
     list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \

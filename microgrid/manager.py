@@ -4,6 +4,8 @@ from collections import defaultdict
 
 import numpy as np
 import datetime
+
+import pandas as pd
 import tqdm
 
 from microgrid.agents.charging_station_agent import ChargingStationAgent
@@ -228,8 +230,8 @@ class Manager:
         regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
 
         ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
-                                     optim_period=dates, coord_method=coord_method,
-                                     regions_map_file=regions_map_file)
+                                     optim_period=pd.date_range(dates[0], dates[-1], freq=f"{delta_t_s}s"),
+                                     coord_method=coord_method, regions_map_file=regions_map_file)
 
         # get "improvement trajectory"
         list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \

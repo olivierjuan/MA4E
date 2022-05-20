@@ -41,6 +41,8 @@ actor_colors = {"ferme": "orange", "industrie": "gray",
                 "evs": "blue", "datacenter": "red"}
 n_colors = len(team_colors)
 n_markers = len(team_markers)
+ONLY_SHOW_DAYS = False
+ONLY_SHOW_HOURS = False
 
 def get_max_value_of_plot(list_of_x_plot):
 
@@ -69,15 +71,12 @@ def generate_time_labels(full_date_plot, only_show_days, only_show_hours):
     elif only_show_days:
         return ["%i-%i-%i" %(elt.year,elt.month,elt.day) for elt in full_date_plot]
     else:
-        return ["%i-%i-%i %s:%s" %(elt.year,elt.month,elt.day,
+        return ["%i-%i %sh" %(elt.day, elt.month,
                                    str(elt.hour) if elt.hour>=10 else "0" \
-                                   + str(elt.hour), str(elt.minute) \
-                                   if elt.minute>=10 \
-                                    else "0"+str(elt.minute)) for elt in full_date_plot]
+                                   + str(elt.hour)) for elt in full_date_plot]
 
-def plot_list_of_tuples(tuples_plot, xlabel, ylabel, num_fig, save_fig, filename,
-                        full_date_plot, only_show_days, only_show_hours,
-                        delta_xticks):
+def plot_list_of_tuples(tuples_plot: list, xlabel: str, ylabel: str, num_fig: int, save_fig: bool, filename: str,
+                        full_date_plot: pd.date_range, delta_xticks: int):
     """
     OBJ: nice plot of SC over a period of multiple days
     
@@ -145,8 +144,8 @@ def plot_list_of_tuples(tuples_plot, xlabel, ylabel, num_fig, save_fig, filename
         plt.xticks(np.arange(min_value_of_plot_x, max_value_of_plot_x + eps_x,
                              delta_xticks*(tuples_plot[0][0][1]-tuples_plot[0][0][0])))
     else:
-        xtick_labels = generate_time_labels(full_date_plot, only_show_days, 
-                                            only_show_hours)
+        xtick_labels = generate_time_labels(full_date_plot, ONLY_SHOW_DAYS,
+                                            ONLY_SHOW_DAYS)
         plt.xticks(np.arange(min_value_of_plot_x, max_value_of_plot_x, delta_xticks), 
                    xtick_labels[::delta_xticks], rotation='vertical')
         
@@ -193,6 +192,7 @@ def plot_scatter_fig(tuples_scatter: list, num_fig: int, save_fig: bool,
     # close figure
     plt.close()
 
+
 def plot_mg_load_during_coord_method(microgrid_prof: dict, region_plot: str,
                                      team_plot: str, filename: str, 
                                      full_date_plot: pd.date_range):
@@ -222,9 +222,11 @@ def plot_mg_load_during_coord_method(microgrid_prof: dict, region_plot: str,
     tuples_plot = [(common_x, microgrid_prof[first_ic_scen][first_dc_scen][region_plot] \
                       [first_ev_scen][team_plot][i_iter], iter_colors[i_iter],
                     "-", "", "iter %i" % i_iter) for i_iter in iterations]
-    
+
+    delta_x_ticks = 4 if len(common_x) <= 48 else 12
+
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
-                        full_date_plot, False, True, 4)
+                        full_date_plot, delta_x_ticks)
 
 def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, microgrid_pmax: dict, 
                                      pv_prof: np.ndarray, region_plot: str, 
@@ -276,9 +278,11 @@ def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, microgrid_pmax: dict,
                                 * np.ones(len(common_x)),
                             team_colors[team_names.index(team)%n_colors], "--",
                             "", "%s: contract. pmax" % team))
-    
+
+    delta_x_ticks = 4 if len(common_x) <= 48 else 12
+
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
-                        full_date_plot, False, True, 4)
+                        full_date_plot, delta_x_ticks)
 
 def plot_per_actor_load_last_iter(load_profiles: dict, pv_prof: np.ndarray, 
                                   region_plot: str, team_plot: str,
@@ -316,9 +320,11 @@ def plot_per_actor_load_last_iter(load_profiles: dict, pv_prof: np.ndarray,
     tuples_plot.extend([(common_x, load_profiles[first_ic_scen][first_dc_scen][region_plot] \
                       [first_ev_scen][team_plot][iterations[-1]][actor],
                     actor_colors[actor], "-", "", actor) for actor in actors])
-    
+
+    delta_x_ticks = 4 if len(common_x) <= 48 else 12
+
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
-                        full_date_plot, False, True, 4)
+                        full_date_plot, delta_x_ticks)
 
 def plot_all_teams_cost_auton_tradeoff_last_iter(cost_autonomy_tradeoff: dict,
                                                  filename: str):
@@ -366,9 +372,9 @@ def plot_all_teams_score_traj(scores_traj: dict, filename: str):
                     team_colors[team_names.index(team)%n_colors], "-",
                     team_markers[team_names.index(team)%n_markers], team) \
                                                         for team in scores_traj]
-    
+
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
-                        list(scores_traj[team_names[0]]), False, False, 1)
+                        list(scores_traj[team_names[0]]), 1)
    
 
 if __name__ == "__main__":
@@ -393,9 +399,6 @@ if __name__ == "__main__":
     date_end = date_start + timedelta(len(tuples_plot[0][0])*delta_t_s)
     full_date_plot = pd.date_range(start=date_start, end=date_end, 
                                    freq="%is" % delta_t_s)
-    only_show_days = False
-    only_show_hours = True
     delta_xticks = 1
     plot_list_of_tuples(tuples_plot, xlabel, ylabel, num_fig, save_fig, filename,
-                        full_date_plot, only_show_days, only_show_hours,
-                        delta_xticks)
+                        full_date_plot, delta_xticks)
