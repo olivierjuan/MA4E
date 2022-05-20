@@ -1,5 +1,5 @@
 from calc_output_metrics import calc_per_actor_bills, calc_microgrid_collective_metrics, \
-    calc_cost_autonomy_tradeoff_last_iter, get_best_team_per_region, get_improvement_traj
+    calc_two_metrics_tradeoff_last_iter, get_best_team_per_region, get_improvement_traj
 
 if __name__ =="__main__":
     import os
@@ -44,15 +44,23 @@ if __name__ =="__main__":
 
     microgrid_prof, microgrid_pmax, collective_metrics = \
         calc_microgrid_collective_metrics(load_profiles=load_profiles, contracted_p_tariffs=contracted_p_tariffs,
-                                          delta_t_s=delta_t_s)
+                                          emission_rates=50*np.ones(n_t), delta_t_s=delta_t_s)
 
     # calculate cost, autonomy tradeoff
-    cost_autonomy_tradeoff = calc_cost_autonomy_tradeoff_last_iter(per_actor_bills=per_actor_bills,
-                                                                   collective_metrics=collective_metrics)
+    aggreg_operations = {"cost": sum, "autonomy_score": np.mean}
+    cost_autonomy_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills,
+                                                                 collective_metrics=collective_metrics, metric_1="cost",
+                                                                 metric_2="autonomy_score", aggreg_operations=aggreg_operations)
+
+    # calculate cost, CO2 emissions tradeoff
+    aggreg_operations = {"cost": sum, "co2_emis": np.mean}
+    cost_co2emis_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills,
+                                                                collective_metrics=collective_metrics, metric_1="cost",
+                                                                metric_2="co2_emis", aggreg_operations=aggreg_operations)
 
     # Get best team per region
     coll_metrics_weights = {"pmax_cost": 1 / 365, "autonomy_score": 1,
-                            "mg_transfo_aging": 0, "n_disj": 0}
+                            "mg_transfo_aging": 0, "n_disj": 0, "co2_emis": 1}
     team_scores, best_teams_per_region, coll_metrics_names = \
         get_best_team_per_region(per_actor_bills=per_actor_bills, collective_metrics=collective_metrics,
                                  coll_metrics_weights=coll_metrics_weights)
@@ -82,8 +90,6 @@ if __name__ =="__main__":
     pv_prof = np.random.rand(n_t)
     ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
                                             microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
-                                            cost_autonomy_tradeoff=cost_autonomy_tradeoff, team_scores=team_scores,
+                                            cost_autonomy_tradeoff=cost_autonomy_tradeoff,
+                                            cost_co2emis_tradeoff=cost_co2emis_tradeoff, team_scores=team_scores,
                                             best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
-
-
-

@@ -326,32 +326,35 @@ def plot_per_actor_load_last_iter(load_profiles: dict, pv_prof: np.ndarray,
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         full_date_plot, delta_x_ticks)
 
-def plot_all_teams_cost_auton_tradeoff_last_iter(cost_autonomy_tradeoff: dict,
-                                                 filename: str):
+def plot_all_teams_two_metrics_tradeoff_last_iter(two_metrics_tradeoff: dict, metric_1: str, metric_2: str,
+                                                  metric_labels: dict, filename: str):
     """
     Plot all teams*PV regions (cost, autonomy) points
 
-    :param cost_autonomy_tradeoff: dict. with keys 1. the team names; 2. PV region
+    :param two_metrics_tradeoff: dict. with keys 1. the team names; 2. PV region
     names and values the associated (cost, autonomy score) aggreg. over the set 
     of other scenarios
+    :param metric_1: name of the first metric considered for the tradeoff
+    :param metric_2: 2nd metric
+    :param metric_labels: dict. containing metric labels
     :param filename: full path to the image to be saved
     """
     
     tuples_scatter = []
-    team_names = list(cost_autonomy_tradeoff)
-    first_region = list(cost_autonomy_tradeoff[team_names[0]])[0]
-    for team in cost_autonomy_tradeoff:
-        for region in cost_autonomy_tradeoff[team]:
+    team_names = list(two_metrics_tradeoff)
+    first_region = list(two_metrics_tradeoff[team_names[0]])[0]
+    for team in two_metrics_tradeoff:
+        for region in two_metrics_tradeoff[team]:
             current_label = team if region == first_region else ""
             # tuples_scatter: list of (x-value, y-value, color, marker, label)
-            tuples_scatter.append((cost_autonomy_tradeoff[team][region]["cost"],
-                                   cost_autonomy_tradeoff[team][region]["autonomy_score"],
+            tuples_scatter.append((two_metrics_tradeoff[team][region][metric_1],
+                                   two_metrics_tradeoff[team][region][metric_2],
                                    region_colors[region], 
                                    team_markers[team_names.index(team)%n_markers],
                                    current_label))
 
     # use generic scatter function
-    plot_scatter_fig(tuples_scatter, 1, True, filename, "Cost (eur)", "Autonomy score")
+    plot_scatter_fig(tuples_scatter, 1, True, filename, metric_labels[metric_1], metric_labels[metric_2])
 
 def plot_all_teams_score_traj(scores_traj: dict, filename: str):
     """

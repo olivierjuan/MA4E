@@ -71,7 +71,7 @@ def calc_per_actor_bills(load_profiles: dict, purchase_price: np.ndarray,
     
     return per_actor_bills
 
-def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs: dict,
+def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs: dict, emission_rates: np.ndarray,
                                       delta_t_s: int) -> dict:
     """
     Calculate collective metrics in a microgrid
@@ -85,11 +85,12 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
     the threshold (max) power values and values the associated tariff (€/year).
     Note that above the last threshold the tariff is linearly extrapolated based
     on the last two values
+    :param emission_rates: CO2 emission rates (gCO2/kWh)
     :param delta_t_s: time-slot duration of the considered discrete time model
     :return: returns 3 dict. with the same keys as load_profiles excepting the one
     of the actors and values the aggregated microgrid load prof. and microgrid pmax,
     and a dict. {"pmax_cost": cost of contracted max power, "autonomy_score": score of 
-    autonomy measuring how much the microgrid is exchanging energy with the grid}
+    autonomy measuring how much the microgrid is exchanging energy with the grid, "co2_emis": CO2 emissions}
     """
 
     microgrid_prof = {}
@@ -149,7 +150,9 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
                                  "mg_transfo_aging": calculate_transfo_aging(current_microgrid_prof,
                                                                              delta_t_s),
                                  "n_disj": calculate_number_of_disj(current_microgrid_prof,
-                                                                    delta_t_s)}
+                                                                    delta_t_s),
+                                 "co2_emis": calculate_co2_emissions(microgrid_prof=current_microgrid_prof,
+                                                                     delta_t_s=delta_t_s, emission_rates=emission_rates)}
     
     return microgrid_prof, microgrid_pmax, collective_metrics
     
@@ -215,8 +218,7 @@ def calculate_autonomy_score(microgrid_prof: np.ndarray, delta_t_s: int) -> floa
         return - delta_t_s/3600 * sum(np.minimum(microgrid_prof, 0))
     # measure all exchanges with the elec. network
     else:
-        return delta_t_s/3600 * (sum(np.maximum(microgrid_prof, 0)) \
-                                    - sum(np.minimum(microgrid_prof, 0)))
+        return delta_t_s/3600 * sum(np.abs(microgrid_prof))
 
 def calculate_co2_emissions(microgrid_prof: np.ndarray, delta_t_s: int, emission_rates: np.ndarray) -> float:
     """
@@ -509,15 +511,15 @@ def calc_total_bill_and_score_fixed_iter(per_actor_bills_fixed_scen_and_iter: di
 
     total_bill = sum([per_actor_bills_fixed_scen_and_iter[elt_actor] \
                           for elt_actor in per_actor_bills_fixed_scen_and_iter])
-    
+
     score_of_iter = total_bill \
        + sum([collective_metrics_fixed_scen_and_iter[coll_metric] \
                            * coll_metrics_weights[coll_metric] for coll_metric \
                                                        in coll_metrics_names])
     return total_bill, score_of_iter
 
-def calc_cost_autonomy_tradeoff_last_iter(per_actor_bills: dict, 
-                                          collective_metrics: dict) -> dict:
+def calc_two_metrics_tradeoff_last_iter(per_actor_bills: dict, collective_metrics: dict, metric_1: str,
+                                        metric_2: str, aggreg_operations : dict) -> dict:
 
     """
     Calculate cost/autonomy tradeoff
@@ -533,48 +535,50 @@ def calc_cost_autonomy_tradeoff_last_iter(per_actor_bills: dict,
     :param coll_metrics_names: names of the collective metrics in current results
     N.B. can be "strictly" included in the list of keys of coll_metrics_weights,
     if not all metrics have been used/calc. in this run
+    :param metric_1: name of the first metric to be considered
+    :param metric_2: idem, for the second
+    :param aggreg_operations: aggregation operations to be used when considering multiple (non-PV) scenarios
     :return: returns a dict. with keys 1. the team names; 2. PV region names and
     values the associated (cost, autonomy score) aggreg. over the set of other
     scenarios
     """
     
     # TODO code case with best iteration
-    
-    aggreg_operations = {"cost": sum, "autonomy_score": np.mean}
-    
+
     # get team names
     team_names = get_team_names(per_actor_bills)
     # and PV regions
     pv_regions = get_simulated_regions(per_actor_bills)
     
-    cost_autonomy_tradeoff = {}
+    two_metrics_tradeoff = {}
     for team in team_names:
-        cost_autonomy_tradeoff[team] = {}
+        two_metrics_tradeoff[team] = {}
         for region in pv_regions:
-            cost_autonomy_tradeoff[team][region] = {"cost": [], "autonomy_score": []}
+            two_metrics_tradeoff[team][region] = {metric_1: [], metric_2: []}
             for ic_scen in per_actor_bills:
                 for dc_scen in per_actor_bills[ic_scen]:
                     for ev_scen in per_actor_bills[ic_scen][dc_scen][region]:
                         last_iter = list(per_actor_bills[ic_scen][dc_scen] \
                                                      [region][ev_scen][team])[-1]
                         # add cost value
-                        cost_autonomy_tradeoff[team][region]["cost"] \
+                        two_metrics_tradeoff[team][region][metric_1] \
                             .append(sum([per_actor_bills[ic_scen][dc_scen] \
                                       [region][ev_scen][team][last_iter][actor] \
                                         for actor in per_actor_bills[ic_scen][dc_scen] \
                                          [region][ev_scen][team][last_iter]]))
                         # and autonomy one
-                        cost_autonomy_tradeoff[team][region]["autonomy_score"] \
+                        two_metrics_tradeoff[team][region][metric_2] \
                           .append(collective_metrics[ic_scen][dc_scen] \
-                                   [region][ev_scen][team][last_iter]["autonomy_score"])
+                                   [region][ev_scen][team][last_iter][metric_2])
             
             # aggreg. cost/autonomy score over all (non PV) scenarios
-            cost_autonomy_tradeoff[team][region]["cost"] = \
-                aggreg_operations["cost"](cost_autonomy_tradeoff[team][region]["cost"])
-            cost_autonomy_tradeoff[team][region]["autonomy_score"] = \
-                aggreg_operations["autonomy_score"](cost_autonomy_tradeoff[team][region]["autonomy_score"])
+            two_metrics_tradeoff[team][region][metric_1] = \
+                aggreg_operations[metric_1](two_metrics_tradeoff[team][region][metric_1])
+            two_metrics_tradeoff[team][region][metric_2] = \
+                aggreg_operations[metric_2](two_metrics_tradeoff[team][region][metric_2])
     
-    return cost_autonomy_tradeoff
+    return two_metrics_tradeoff
+
 
 def save_per_region_score_to_csv(team_scores: dict, result_dir: str,
                                  date_of_run: datetime.datetime):
