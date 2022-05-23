@@ -20,7 +20,7 @@ class EV:
 
     def reset(self):
         self.battery.reset()
-        self.day = randint(1, 365)
+        #self.day = randint(1, 365)
 
     def get_is_plugged(self, when: datetime.datetime, start: datetime.datetime):
         delta_day = (when - datetime.datetime.fromordinal(start.date().toordinal())) // datetime.timedelta(days=1)
