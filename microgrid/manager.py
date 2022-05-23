@@ -14,8 +14,6 @@ from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
-from calc_output_metrics import calc_microgrid_collective_metrics,  calc_cost_autonomy_tradeoff_last_iter, \
-    calc_per_actor_bills, get_best_team_per_region, get_improvement_traj
 from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
     get_best_team_per_region, get_improvement_traj
