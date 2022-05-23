@@ -22,8 +22,8 @@ from ppt_utils import add_img_to_slide, init_img_plus_title_slide, add_linebreak
     suppress_unused_text_placeholders
 from calc_output_metrics import check_if_unique_list
 from plot import plot_mg_load_during_coord_method, plot_all_teams_mg_load_last_iter, \
-            plot_per_actor_load_last_iter, plot_all_teams_cost_auton_tradeoff_last_iter, \
-            plot_all_teams_score_traj
+            plot_per_actor_load_last_iter, plot_all_teams_two_metrics_tradeoff_last_iter, \
+            plot_all_teams_score_traj, plot_agent_results_comparison
 
 # Cf. https://python-pptx.readthedocs.io/en/latest/
 # https://python-pptx.readthedocs.io/en/latest/user/quickstart.html
@@ -128,8 +128,8 @@ class PptSynthesis():
                          BOTTOM_EMPTY_SPACE / 100 * self.prs.slide_height)
 
     def create_summary_of_run_ppt(self, pv_prof: np.ndarray, load_profiles: dict, microgrid_prof: dict,
-                                  microgrid_pmax: dict, cost_autonomy_tradeoff: dict, team_scores: dict,
-                                  best_teams_per_region: dict, scores_traj: dict):
+                                  microgrid_pmax: dict, per_actor_bills_internal: dict, cost_autonomy_tradeoff: dict,
+                                  cost_co2emis_tradeoff: dict, team_scores: dict, best_teams_per_region: dict, scores_traj: dict):
         """
         Create a powerpoint to summarize the results of a given run of the microgrid
         serious game
@@ -149,6 +149,9 @@ class PptSynthesis():
         :param cost_autonomy_tradeoff: dict. with keys 1. the team names; 2. PV region
         names and values the associated (cost, autonomy score) aggreg. over the set
         of other scenarios
+        :param per_actor_bills_internal: per actor INTERNAL bills, i.e. based on the MG price coordination
+         signal. Same keys as preceding dict.
+        :param cost_co2emis_tradeoff: idem with (cost, CO2 emissions) tradeoff
         :param team_scores: dict. with keys 1. team name; 2. region name and values
         the associated score of the current run
         :param best_teams_per_region: dict. with keys the names of the region simulated
@@ -254,6 +257,31 @@ class PptSynthesis():
         # suppress unused text placeholder (of index 1, 0 is used for the title)
         suppress_unused_text_placeholders(shapes)
 
+        # 1 slide with a comparison of all agents INTERNAL cost at last iteration of coord. method
+        slide, shapes, title_shape = \
+            init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX,
+                                      f"All teams agents norm. cost AT THE END of {self.coord_method} \n (PV) region: {region_coord_dyn_plot}",
+                                      FONT_STYLE["name"], FONT_STYLE["size"], FONT_STYLE["bold"], FONT_STYLE["italic"],
+                                      TEXT_VERTICAL_ALIGN)
+
+        # plot and save
+        # consider first scenario for this plot
+        scenario_plot = {"ic": 1, "dc": 1, "pv": region_coord_dyn_plot, "ev": 1}
+        per_agent_cost_comparison_file = os.path.join(self.result_dir,
+                                                      f"per_agent_cost_comparison_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
+        plot_agent_results_comparison(per_actor_bills_internal=per_actor_bills_internal, scenario_plot=scenario_plot,
+                                      filename=per_agent_cost_comparison_file.split(".")[0], save_fig=True)
+
+        # open as Pillow Image
+        per_agent_cost_comparison_img = Image.open(per_agent_cost_comparison_file)
+
+        # add sized image to current slide
+        self.add_sized_img_to_slide(slide=slide, img=per_agent_cost_comparison_img,
+                                    img_file=per_agent_cost_comparison_file, title_shape=title_shape)
+
+        # suppress unused text placeholder (of index 1, 0 is used for the title)
+        suppress_unused_text_placeholders(shapes)
+
         # 1 slide with scatter with 1 (eur, autonomy) point per team*PV region
         slide, shapes, title_shape = \
             init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX, f"All teams (cost, autonomy) tradeoff with {self.coord_method}",
@@ -264,8 +292,10 @@ class PptSynthesis():
         all_teams_cost_auton_tradeoff_file = \
                 os.path.join(self.result_dir, f"all_teams_cost_auton_tradeoff_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
 
-        plot_all_teams_cost_auton_tradeoff_last_iter(cost_autonomy_tradeoff,
-                                                     all_teams_cost_auton_tradeoff_file.split(".")[0])
+        metric_labels = {"cost": "Cost (eur)", "autonomy_score": "Autonomy score"}
+        plot_all_teams_two_metrics_tradeoff_last_iter(two_metrics_tradeoff=cost_autonomy_tradeoff,
+                                                      metric_1="cost", metric_2="autonomy_score", metric_labels=metric_labels,
+                                                      filename=all_teams_cost_auton_tradeoff_file.split(".")[0])
 
         # open as Pillow Image
         all_teams_cost_auton_tradeoff_img = Image.open(all_teams_cost_auton_tradeoff_file)
@@ -273,6 +303,31 @@ class PptSynthesis():
         # add sized image to current slide
         self.add_sized_img_to_slide(slide=slide, img=all_teams_cost_auton_tradeoff_img,
                                     img_file=all_teams_cost_auton_tradeoff_file, title_shape=title_shape)
+
+        # suppress unused text placeholder (of index 1, 0 is used for the title)
+        suppress_unused_text_placeholders(shapes)
+
+        # 1 slide with scatter with 1 (eur, CO2 emissions) point per team*PV region
+        slide, shapes, title_shape = \
+            init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX, f"All teams (cost, CO2 emissions) tradeoff with {self.coord_method}",
+                                      FONT_STYLE["name"], FONT_STYLE["size"], FONT_STYLE["bold"], FONT_STYLE["italic"],
+                                      TEXT_VERTICAL_ALIGN)
+
+        # plot and save
+        all_teams_cost_co2emis_tradeoff_file = \
+                os.path.join(self.result_dir, f"all_teams_cost_co2emis_tradeoff_last_iter_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
+
+        metric_labels = {"cost": "Cost (eur)", "co2_emis": "CO2 emissions (gCO2eq.)"}
+        plot_all_teams_two_metrics_tradeoff_last_iter(two_metrics_tradeoff=cost_co2emis_tradeoff,
+                                                      metric_1="cost", metric_2="co2_emis", metric_labels=metric_labels,
+                                                      filename=all_teams_cost_co2emis_tradeoff_file.split(".")[0])
+
+        # open as Pillow Image
+        all_teams_cost_co2emis_tradeoff_img = Image.open(all_teams_cost_co2emis_tradeoff_file)
+
+        # add sized image to current slide
+        self.add_sized_img_to_slide(slide=slide, img=all_teams_cost_co2emis_tradeoff_img,
+                                    img_file=all_teams_cost_co2emis_tradeoff_file, title_shape=title_shape)
 
         # suppress unused text placeholder (of index 1, 0 is used for the title)
         suppress_unused_text_placeholders(shapes)

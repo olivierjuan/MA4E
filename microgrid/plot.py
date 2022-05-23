@@ -9,6 +9,7 @@ Created on Tue Jun 19 11:41:04 2018
 
 # IMPORT
 # standard
+import math
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -326,32 +327,35 @@ def plot_per_actor_load_last_iter(load_profiles: dict, pv_prof: np.ndarray,
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         full_date_plot, delta_x_ticks)
 
-def plot_all_teams_cost_auton_tradeoff_last_iter(cost_autonomy_tradeoff: dict,
-                                                 filename: str):
+def plot_all_teams_two_metrics_tradeoff_last_iter(two_metrics_tradeoff: dict, metric_1: str, metric_2: str,
+                                                  metric_labels: dict, filename: str):
     """
     Plot all teams*PV regions (cost, autonomy) points
 
-    :param cost_autonomy_tradeoff: dict. with keys 1. the team names; 2. PV region
+    :param two_metrics_tradeoff: dict. with keys 1. the team names; 2. PV region
     names and values the associated (cost, autonomy score) aggreg. over the set 
     of other scenarios
+    :param metric_1: name of the first metric considered for the tradeoff
+    :param metric_2: 2nd metric
+    :param metric_labels: dict. containing metric labels
     :param filename: full path to the image to be saved
     """
     
     tuples_scatter = []
-    team_names = list(cost_autonomy_tradeoff)
-    first_region = list(cost_autonomy_tradeoff[team_names[0]])[0]
-    for team in cost_autonomy_tradeoff:
-        for region in cost_autonomy_tradeoff[team]:
+    team_names = list(two_metrics_tradeoff)
+    first_region = list(two_metrics_tradeoff[team_names[0]])[0]
+    for team in two_metrics_tradeoff:
+        for region in two_metrics_tradeoff[team]:
             current_label = team if region == first_region else ""
             # tuples_scatter: list of (x-value, y-value, color, marker, label)
-            tuples_scatter.append((cost_autonomy_tradeoff[team][region]["cost"],
-                                   cost_autonomy_tradeoff[team][region]["autonomy_score"],
+            tuples_scatter.append((two_metrics_tradeoff[team][region][metric_1],
+                                   two_metrics_tradeoff[team][region][metric_2],
                                    region_colors[region], 
                                    team_markers[team_names.index(team)%n_markers],
                                    current_label))
 
     # use generic scatter function
-    plot_scatter_fig(tuples_scatter, 1, True, filename, "Cost (eur)", "Autonomy score")
+    plot_scatter_fig(tuples_scatter, 1, True, filename, metric_labels[metric_1], metric_labels[metric_2])
 
 def plot_all_teams_score_traj(scores_traj: dict, filename: str):
     """
@@ -375,7 +379,153 @@ def plot_all_teams_score_traj(scores_traj: dict, filename: str):
 
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         list(scores_traj[team_names[0]]), 1)
-   
+
+
+def plot_agent_results_comparison(per_actor_bills_internal: dict, scenario_plot: dict, filename: str,
+                                  save_fig: bool=False):
+    """
+    Plot comparison of agents results, based on last iteration of coordination method in the microgrid
+
+    Args:
+        per_actor_bills_internal(dict): internal per-actor bills (dict. with all scenario keys, and team names,
+        iteration, agent names)
+        scenario_plot(dict): dict. indicating the scenarios to be used for this plot
+        filename(str): full path to the file to be saved, if any
+        save_fig(bool): save figure in a file?
+    """
+
+    # get number of teams
+    run_teams = get_teams(per_actor_bills_internal=per_actor_bills_internal)
+    n_teams = len(run_teams)
+
+    # get number of agents in the microgrid
+    agents = list(actor_colors.keys())
+    n_agents = len(agents)
+
+    # get last iteration idx
+    last_iter = get_last_iter(per_actor_bills_internal=per_actor_bills_internal)
+
+    # normalize per actor bills based on maximal value for each of the agents type (to get plot values
+    # between 0 and 1)
+    per_actor_bills_internal_norm = normalize_per_actor_metric(per_actor_metric=per_actor_bills_internal,
+                                                               current_scenario=scenario_plot, current_iter=last_iter,
+                                                               current_teams=run_teams, agents=agents)
+
+    # and gather data into a simpler team dict.
+    bills_for_plot = {team: [per_actor_bills_internal_norm[scenario_plot["ic"]][scenario_plot["dc"]][scenario_plot["pv"]]\
+                                 [scenario_plot["ev"]][team][last_iter][agent] for agent in agents] \
+                        for team in run_teams}
+
+    width = 1.5  # the width of the bars
+    group_width = math.ceil(n_teams * width + 1)
+    x = np.arange(0, group_width * n_agents, group_width)  # the label locations
+
+    all_agents_scores = []
+    fig, ax = plt.subplots()
+    rects = {}
+    max_value_of_plot = -1
+    for i_team in range(n_teams):
+        current_team = run_teams[i_team]
+        all_agents_scores.append(bills_for_plot[current_team])
+
+        rects[i_team] = ax.bar(x + (i_team - (n_teams - 1) / 2) * width, bills_for_plot[current_team],
+                               width, label=current_team)
+
+        for i_agent in range(n_agents):
+            rect = rects[i_team][i_agent]
+
+            height = rect.get_height()
+            annot_txt = f"{bills_for_plot[current_team][i_agent]:.2f}"
+
+            ax.annotate(annot_txt, xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 points vertical offset
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=7)
+
+            if height + 3 > max_value_of_plot:
+                max_value_of_plot = height + 3
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel('Agents INTERNAL costs (norm. by max \n- per-agent type - value over teams)')
+    ax.set_title('Agents and teams')
+    ax.set_xticks(x)
+    ax.set_xticklabels(agents)
+    ax.set_ylim([-0.05, 1.05])
+
+    plt.gca().legend(prop={'size': 7}, loc='upper left', bbox_to_anchor=(1, 0.95))
+    fig.tight_layout()
+
+    if save_fig:
+        plt.savefig(f"{filename}.{fig_format}")
+
+    # close figure
+    plt.close()
+
+def get_teams(per_actor_bills_internal: dict) -> list:
+    """
+    Get teams based on internal per actor bill dictionary
+    """
+
+    first_ic_scen = list(per_actor_bills_internal.keys())[0]
+    first_dc_scen = list(per_actor_bills_internal[first_ic_scen].keys())[0]
+    first_pv_scen = list(per_actor_bills_internal[first_ic_scen][first_dc_scen].keys())[0]
+    first_ev_scen = list(per_actor_bills_internal[first_ic_scen][first_dc_scen][first_pv_scen].keys())[0]
+
+    return list(per_actor_bills_internal[first_ic_scen][first_dc_scen][first_pv_scen][first_ev_scen].keys())
+
+def get_last_iter(per_actor_bills_internal: dict) -> list:
+    """
+    Get last iteration idx based on internal per actor bill dictionary
+    """
+
+    first_ic_scen = list(per_actor_bills_internal.keys())[0]
+    first_dc_scen = list(per_actor_bills_internal[first_ic_scen].keys())[0]
+    first_pv_scen = list(per_actor_bills_internal[first_ic_scen][first_dc_scen].keys())[0]
+    first_ev_scen = list(per_actor_bills_internal[first_ic_scen][first_dc_scen][first_pv_scen].keys())[0]
+    first_team = list(per_actor_bills_internal[first_ic_scen][first_dc_scen][first_pv_scen][first_ev_scen].keys())[0]
+
+    return list(per_actor_bills_internal[first_ic_scen][first_dc_scen][first_pv_scen][first_ev_scen][first_team].keys())[-1]
+
+def normalize_per_actor_metric(per_actor_metric: dict, current_scenario: dict, current_iter: int,
+                               current_teams: list, agents: list) -> dict:
+    """
+    Normalize per actor metric, based on the maximal value observed over all teams for this agent, in order to
+    get values between 0 and 1
+    """
+
+    # initialize with max. at 0 (suppose that metric be nonnegative)
+    max_metric_values = {agent: 0 for agent in agents}
+
+    # loop over teams (for current scenario and iteration) to get per-agent type maximum (over teams)
+    for team in current_teams:
+        # and over agents
+        for agent in agents:
+            if per_actor_metric[current_scenario["ic"]][current_scenario["dc"]][current_scenario["pv"]] \
+                    [current_scenario["ev"]][team][current_iter][agent] > max_metric_values[agent]:
+                max_metric_values[agent] = per_actor_metric[current_scenario["ic"]][current_scenario["dc"]] \
+                    [current_scenario["pv"]][current_scenario["ev"]][team][current_iter][agent]
+
+    # and create normalized dict.
+    per_actor_metric_norm = {current_scenario["ic"]:
+                                 {current_scenario["dc"]:
+                                      {current_scenario["pv"]:
+                                           {current_scenario["ev"]:
+                                                {team:
+                                                     {current_iter:
+                                                          {agent: per_actor_metric[current_scenario["ic"]] \
+                                                              [current_scenario["dc"]][current_scenario["pv"]] \
+                                                              [current_scenario["ev"]][team][current_iter][agent] \
+                                                           / max_metric_values[agent] if max_metric_values[agent] > 0 \
+                                                           else 0 for agent in max_metric_values}
+                                                      } for team in current_teams
+                                                 }
+                                            }
+                                       }
+                                  }
+                             }
+
+
+    return per_actor_metric_norm
 
 if __name__ == "__main__":
     import os

@@ -16,6 +16,9 @@ from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
 from calc_output_metrics import calc_microgrid_collective_metrics,  calc_cost_autonomy_tradeoff_last_iter, \
     calc_per_actor_bills, get_best_team_per_region, get_improvement_traj
+from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
+    calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
+    get_best_team_per_region, get_improvement_traj
 from config import get_configs
 
 
@@ -199,26 +202,52 @@ class Manager:
                                 18: 223.68, 24: 274.68, 30: 299.52, 36: 337.56}
 
         # calculate per-actor bill
-        purchase_price = 0.10 + 0.1 * np.random.rand(len(dates))
-        sale_price = 0.05 + 0.1 * np.random.rand(len(dates))
+        n_t = len(dates)
+        # TODO: update signal from run
+        signal = np.random.rand(n_t)
+        purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
+        sale_price = 0.05 + 0.1 * np.random.rand(n_t)
 
         delta_t_s = self.delta_t.total_seconds()
         per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
-                                               sale_price=sale_price, delta_t_s=delta_t_s)
+                                               sale_price=sale_price, mg_price_signal=signal, delta_t_s=delta_t_s)
 
         microgrid_prof, microgrid_pmax, collective_metrics = \
             calc_microgrid_collective_metrics(load_profiles=load_profiles, contracted_p_tariffs=contracted_p_tariffs,
-                                              delta_t_s=delta_t_s)
+                                              emission_rates=50 * np.ones(n_t), delta_t_s=delta_t_s)
+
+        # get external (real) bills
+        per_actor_bills_external = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                         last_level_selected_keys=["external"])
+        per_actor_bills_external = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_external,
+                                                                        last_key="external")
+        # and the internal ones, used for coord. into the microgrid
+        per_actor_bills_internal = subselec_dict_based_on_lastlevel_keys(my_dict=copy.deepcopy(per_actor_bills),
+                                                                         last_level_selected_keys=["internal"])
+        per_actor_bills_internal = suppress_last_key_in_per_actor_bills(per_actor_bills=per_actor_bills_internal,
+                                                                        last_key="internal")
 
         # calculate cost, autonomy tradeoff
-        cost_autonomy_tradeoff = calc_cost_autonomy_tradeoff_last_iter(per_actor_bills=per_actor_bills,
-                                                                       collective_metrics=collective_metrics)
+        aggreg_operations = {"cost": sum, "autonomy_score": np.mean}
+        cost_autonomy_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
+                                                                     collective_metrics=collective_metrics,
+                                                                     metric_1="cost",
+                                                                     metric_2="autonomy_score",
+                                                                     aggreg_operations=aggreg_operations)
+
+        # calculate cost, CO2 emissions tradeoff
+        aggreg_operations = {"cost": sum, "co2_emis": np.mean}
+        cost_co2emis_tradeoff = calc_two_metrics_tradeoff_last_iter(per_actor_bills=per_actor_bills_external,
+                                                                    collective_metrics=collective_metrics,
+                                                                    metric_1="cost",
+                                                                    metric_2="co2_emis",
+                                                                    aggreg_operations=aggreg_operations)
 
         # Get best team per region
         coll_metrics_weights = {"pmax_cost": 1 / 365, "autonomy_score": 1,
-                                "mg_transfo_aging": 0, "n_disj": 0}
+                                "mg_transfo_aging": 0, "n_disj": 0, "co2_emis": 1}
         team_scores, best_teams_per_region, coll_metrics_names = \
-            get_best_team_per_region(per_actor_bills=per_actor_bills, collective_metrics=collective_metrics,
+            get_best_team_per_region(per_actor_bills=per_actor_bills_external, collective_metrics=collective_metrics,
                                      coll_metrics_weights=coll_metrics_weights)
 
         current_dir = os.getcwd()
@@ -241,7 +270,9 @@ class Manager:
 
         ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
                                                 microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
-                                                cost_autonomy_tradeoff=cost_autonomy_tradeoff, team_scores=team_scores,
+                                                per_actor_bills_internal=per_actor_bills_internal,
+                                                cost_autonomy_tradeoff=cost_autonomy_tradeoff,
+                                                cost_co2emis_tradeoff=cost_co2emis_tradeoff, team_scores=team_scores,
                                                 best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
 
 
