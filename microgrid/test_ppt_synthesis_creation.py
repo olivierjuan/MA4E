@@ -28,6 +28,26 @@ if __name__ =="__main__":
                                                                   8.92, -1.98, 15.56, 3.54, 2.47, 3.35, -0.54, 4.50, 5.10,
                                                                   -2.17, 18.34, 5.30, 3.78, 9.54, 5.81])
                                                    }
+                                              },
+                                        'pir':
+                                             {1:
+                                                  {'ferme': 0.5*np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+                                                                      -0.21, -1.31, -2.67, -4.16, -5.69, -7.20, -8.63,
+                                                                      -9.94,
+                                                                      -11.09, -12.05, -12.80, -13.30, -13.57]),
+                                                   'evs': 0.5*np.array(
+                                                       [17.83, 22.24, 24.97, 40.00, 35.14, 11.71, 24.67, 1.30, 14.61,
+                                                        2.10, 5.24, 1.86, 4.12, 5.14, 2.63, 3.61, 1.94, 4.47, 3.97,
+                                                        1.29, 2.79, 2.85, 2.67, 4.28]),
+                                                   'industrie': 0.5*np.array(
+                                                       [51.51, 61.24, 53.53, 47.86, 48.50, 58.21, 51.73, 40.96,
+                                                        58.68, 51.46, 49.14, 48.13, 54.49, 47.25, 54.65, 49.06,
+                                                        51.79, 50.18, 54.30, 49.15, 55.42, 60.26, 53.66, 48.93]),
+                                                   'datacenter': 0.5*np.array(
+                                                       [2.29, 19.72, -0.78, 1.79, 15.69, 8.96, 9.17, -3.34, 14.19,
+                                                        8.92, -1.98, 15.56, 3.54, 2.47, 3.35, -0.54, 4.50, 5.10,
+                                                        -2.17, 18.34, 5.30, 3.78, 9.54, 5.81])
+                                                   }
                                               }
                                          }
                                     }
@@ -105,6 +125,7 @@ if __name__ =="__main__":
     pv_prof = np.random.rand(n_t)
     ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
                                             microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
+                                            per_actor_bills_internal=per_actor_bills_internal,
                                             cost_autonomy_tradeoff=cost_autonomy_tradeoff,
                                             cost_co2emis_tradeoff=cost_co2emis_tradeoff, team_scores=team_scores,
                                             best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
