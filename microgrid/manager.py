@@ -321,10 +321,10 @@ if __name__ == "__main__":
     #teams = ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']
     teams = ['pir']
     for team in teams:
-        modSF = importlib.import_module(f'teams.{team}.microgrid.agents.solar_farm_agent')
-        modCS = importlib.import_module(f'teams.{team}.microgrid.agents.charging_station_agent')
-        modI = importlib.import_module(f'teams.{team}.microgrid.agents.industrial_agent')
-        modDC = importlib.import_module(f'teams.{team}.microgrid.agents.data_center_agent')
+        modSF = importlib.import_module(f'microgrid.agents.solar_farm_agent')
+        modCS = importlib.import_module(f'microgrid.agents.charging_station_agent')
+        modI = importlib.import_module(f'microgrid.agents.industrial_agent')
+        modDC = importlib.import_module(f'microgrid.agents.data_center_agent')
         agents = {
             'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N)),
             'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N)),
