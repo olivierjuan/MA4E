@@ -8,10 +8,6 @@ import datetime
 import pandas as pd
 import tqdm
 
-from microgrid.agents.charging_station_agent import ChargingStationAgent
-from microgrid.agents.data_center_agent import DataCenterAgent
-from microgrid.agents.industrial_agent import IndustrialAgent
-from microgrid.agents.solar_farm_agent import SolarFarmAgent
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
@@ -20,6 +16,7 @@ from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
 from calc_output_metrics import calc_microgrid_collective_metrics,  calc_cost_autonomy_tradeoff_last_iter, \
     calc_per_actor_bills, get_best_team_per_region, get_improvement_traj
+from config import get_configs
 
 
 class Manager:
@@ -281,71 +278,29 @@ class MyManager(Manager):
 
 if __name__ == "__main__":
     delta_t = datetime.timedelta(minutes=30)
-    time_horizon = datetime.timedelta(days=1) # taille de l'horizon glissant
+    time_horizon = datetime.timedelta(days=1)  # taille de l'horizon glissant
     N = time_horizon // delta_t
-    solar_farm_config = {
-        'battery': {
-            'capacity': 30,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'pv': {
-            'surface': 100,
-            'location': "enpc",  # or (lat, long) in float
-            'tilt': 30,  # in degree
-            'azimuth': 180,  # in degree from North
-            'tracking': None,  # None, 'horizontal', 'dual'
-        }
-    }
-    station_config = {
-        'pmax': 40,
-        'evs': [
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-        ]
-    }
-    industrial_config = {
-        'battery': {
-            'capacity': 60,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'building': {
-            'site': 1,
-        }
-    }
-    data_center_config = {
-        'scenario': 1,
-    }
+
+    seed = 1234
+    configs = get_configs(seed)
+
     import importlib
     load_profiles = {}
     dates = None
     pv_prof = None
 
-    for team in ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']:
+    #teams = ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']
+    teams = ['pir']
+    for team in teams:
         modSF = importlib.import_module(f'teams.{team}.microgrid.agents.solar_farm_agent')
         modCS = importlib.import_module(f'teams.{team}.microgrid.agents.charging_station_agent')
         modI = importlib.import_module(f'teams.{team}.microgrid.agents.industrial_agent')
         modDC = importlib.import_module(f'teams.{team}.microgrid.agents.data_center_agent')
         agents = {
-            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=solar_farm_config, nb_pdt=N)),
-            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=station_config, nb_pdt=N)),
-            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=industrial_config, nb_pdt=N)),
-            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=data_center_config, nb_pdt=N)),
+            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N)),
+            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N)),
+            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=configs['industrial_config'], nb_pdt=N)),
+            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=configs['data_center_config'], nb_pdt=N)),
         }
         manager = MyManager(agents,
                             delta_t=delta_t,
