@@ -461,10 +461,11 @@ class PptSynthesis():
             # Join text if multiple teams with same score
             best_teams_txt = "/".join(best_teams_per_region[region])
             # get text width and height
-            current_font = ImageFont.truetype("%s%s.ttf" % (TEAM_NAME_FONT_STYLE["name"].lower(),
-                                              "b" if TEAM_NAME_FONT_STYLE["bold"] else "i" \
-                                              if TEAM_NAME_FONT_STYLE["italic"] else ""),
-                                              TEAM_NAME_FONT_STYLE["size"])
+            current_font = ImageFont.load_default()
+            #truetype("%s%s.ttf" % (TEAM_NAME_FONT_STYLE["name"].lower(),
+            #                                  "b" if TEAM_NAME_FONT_STYLE["bold"] else "i" \
+            #                                  if TEAM_NAME_FONT_STYLE["italic"] else ""),
+            #                                  TEAM_NAME_FONT_STYLE["size"])
 
             # add linebreak in text to fit with max. textbox width
             best_teams_txt = add_linebreak_to_txt(best_teams_txt, draw_regions_map_img,

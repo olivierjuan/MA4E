@@ -8,10 +8,6 @@ import datetime
 import pandas as pd
 import tqdm
 
-from microgrid.agents.charging_station_agent import ChargingStationAgent
-from microgrid.agents.data_center_agent import DataCenterAgent
-from microgrid.agents.industrial_agent import IndustrialAgent
-from microgrid.agents.solar_farm_agent import SolarFarmAgent
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
@@ -21,6 +17,7 @@ from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_fo
 from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
     get_best_team_per_region, get_improvement_traj, set_on_off_peak_fare_vector
+from config import get_configs
 
 
 class Manager:
@@ -180,8 +177,7 @@ class Manager:
         plt.show()
 
 
-    def generate_summary_ppt(self):
-        mg_team_name = "champions"
+    def generate_load_profile(self, mg_team_name='champions'):
         iter_idx = 1
         dates = list(sorted(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
         agents = list(filter(lambda x: not x.startswith('__'), self.data_bank[dates[0]].keys()))
@@ -192,6 +188,9 @@ class Manager:
                                          }
                               }
                          }
+        return load_profiles, dates, pv_prof
+
+    def generate_summary_ppt(self, load_profiles, dates, pv_prof):
         # update dict. to fit with the multiple scenarios case
         fixed_scenario = (1, 1, "grand_nord", 1)
         load_profiles = set_to_multiple_scenarios_format(dict_wo_scenarios=load_profiles, fixed_scenario=fixed_scenario)
@@ -260,7 +259,7 @@ class Manager:
         regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
 
         ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
-                                     optim_period=pd.date_range(dates[0], dates[-1], freq=f"{delta_t_s}s"),
+                                     optim_period=pd.date_range(dates[0], dates[-1], freq=f"{int(delta_t_s)}s"),
                                      coord_method=coord_method, regions_map_file=regions_map_file)
 
         # get "improvement trajectory"
@@ -310,68 +309,38 @@ class MyManager(Manager):
 
 if __name__ == "__main__":
     delta_t = datetime.timedelta(minutes=30)
-    time_horizon = datetime.timedelta(days=1) # taille de l'horizon glissant
+    time_horizon = datetime.timedelta(days=1)  # taille de l'horizon glissant
     N = time_horizon // delta_t
-    solar_farm_config = {
-        'battery': {
-            'capacity': 30,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'pv': {
-            'surface': 100,
-            'location': "enpc",  # or (lat, long) in float
-            'tilt': 30,  # in degree
-            'azimuth': 180,  # in degree from North
-            'tracking': None,  # None, 'horizontal', 'dual'
+
+    seed = 1234
+    configs = get_configs(seed)
+
+    import importlib
+    load_profiles = {}
+    dates = None
+    pv_prof = None
+
+    #teams = ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']
+    teams = ['pir']
+    for team in teams:
+        modSF = importlib.import_module(f'microgrid.agents.solar_farm_agent')
+        modCS = importlib.import_module(f'microgrid.agents.charging_station_agent')
+        modI = importlib.import_module(f'microgrid.agents.industrial_agent')
+        modDC = importlib.import_module(f'microgrid.agents.data_center_agent')
+        agents = {
+            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N)),
+            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N)),
+            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=configs['industrial_config'], nb_pdt=N)),
+            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=configs['data_center_config'], nb_pdt=N)),
         }
-    }
-    station_config = {
-        'pmax': 40,
-        'evs': [
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 22,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-            {
-                'capacity': 40,
-                'pmax': 3,
-            },
-        ]
-    }
-    industrial_config = {
-        'battery': {
-            'capacity': 60,
-            'efficiency': 0.95,
-            'pmax': 10,
-        },
-        'building': {
-            'site': 1,
-        }
-    }
-    data_center_config = {
-        'scenario': 1,
-    }
-    agents = {
-        'ferme': SolarFarmAgent(SolarFarmEnv(solar_farm_config=solar_farm_config, nb_pdt=N)),
-        'evs': ChargingStationAgent(ChargingStationEnv(station_config=station_config, nb_pdt=N)),
-        'industrie': IndustrialAgent(IndustrialEnv(industrial_config=industrial_config, nb_pdt=N)),
-        'datacenter': DataCenterAgent(DataCenterEnv(data_center_config=data_center_config, nb_pdt=N)),
-    }
-    manager = MyManager(agents,
-                        delta_t=delta_t,
-                        horizon=time_horizon,
-                        simulation_horizon=datetime.timedelta(hours=12), # durée de la glissade
-                        max_iterations=10, # nombre d'iterations de convergence des prix
-                        )
-    manager.run()
-    manager.plots()
-    manager.generate_summary_ppt()
+        manager = MyManager(agents,
+                            delta_t=delta_t,
+                            horizon=time_horizon,
+                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
+                            max_iterations=10, # nombre d'iterations de convergence des prix
+                            )
+        manager.run()
+        #manager.plots()
+        ld, dates, pv_prof = manager.generate_load_profile(team)
+        load_profiles.update(ld)
+    manager.generate_summary_ppt(load_profiles, dates, pv_prof)
