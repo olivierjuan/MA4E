@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
 from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
-    get_best_team_per_region, get_improvement_traj
+    get_best_team_per_region, get_improvement_traj, set_on_off_peak_fare_vector
 
 
 class Manager:
@@ -204,8 +204,11 @@ class Manager:
         n_t = len(dates)
         # TODO: update signal from run
         signal = np.random.rand(n_t)
-        purchase_price = 0.10 + 0.1 * np.random.rand(n_t)
-        sale_price = 0.05 + 0.1 * np.random.rand(n_t)
+        # TODO on-off
+        off_peak_price = 0.10
+        on_peak_price = 0.17
+        purchase_price = set_on_off_peak_fare_vector(dates=dates)
+        sale_price = np.zeros(n_t)
 
         delta_t_s = self.delta_t.total_seconds()
         per_actor_bills = calc_per_actor_bills(load_profiles=load_profiles, purchase_price=purchase_price,
@@ -273,7 +276,6 @@ class Manager:
                                                 cost_autonomy_tradeoff=cost_autonomy_tradeoff,
                                                 cost_co2emis_tradeoff=cost_co2emis_tradeoff, team_scores=team_scores,
                                                 best_teams_per_region=best_teams_per_region, scores_traj=scores_traj)
-
 
 class MyManager(Manager):
     def __init__(self, *args, **kwargs):
