@@ -11,7 +11,10 @@ class ChargingStationAgent:
                       previous_state=None,
                       previous_action=None,
                       previous_reward=None):
-        return self.env.action_space.sample()
+        return self.take_baseline_decision()
+
+    def take_baseline_decision(self):
+        return 1
 
 
 if __name__ == "__main__":

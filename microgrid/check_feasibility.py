@@ -12,8 +12,8 @@ import numpy as np
 
 wrong_format_score = 1000
 pu_infeas_score = 0.1
-default_pu_infeas_score = 0.01 # when 0 value is the one to be obtained, 
-                              # no relative deviation can be calc.
+default_pu_infeas_score = 0.01 # when 0 value is the one to be obtained, no relative deviation can be calc.
+
 
 def calculate_infeas_score(n_infeas_check: int, infeas_list: list, 
                            n_default_infeas: int) -> float:
@@ -28,11 +28,10 @@ def calculate_infeas_score(n_infeas_check: int, infeas_list: list,
     be respected
     """
     
-    return np.sum(infeas_list) / n_infeas_check * pu_infeas_score \
-                                    + n_default_infeas * default_pu_infeas_score
-                                    
-def check_data_center_feasibility(load_profile: np.ndarray, cop_cs: float,
-                                  cop_hp: float, eer: float, n_ts: int, 
+    return np.sum(infeas_list) / n_infeas_check * pu_infeas_score + n_default_infeas * default_pu_infeas_score
+
+
+def check_data_center_feasibility(load_profile: np.ndarray, cop_cs: float, cop_hp: float, eer: float, n_ts: int,
                                   delta_t_s: int, it_load_profile: np.ndarray) -> float:
     """
     Check heat pump load profile obtained from the DC module
@@ -53,20 +52,18 @@ def check_data_center_feasibility(load_profile: np.ndarray, cop_cs: float,
     
     # check that DC load is non-negative and smaller than IT load up to a proportional coeff.
     
-    n_infeas_check = 0 # number of constraints checked (to normalize 
-                   # the infeas. score at the end)
+    n_infeas_check = 0  # number of constraints checked (to normalize the infeas. score at the end)
     
     # identify time-slots with non-zero IT cons.
     nonzero_it_load_ts = np.where(it_load_profile > 0)[0]
     prop_nonzero_it_load = cop_cs/(eer*(cop_hp-1)*delta_t_s)*it_load_profile[nonzero_it_load_ts]
-    infeas_list = list(np.maximum(load_profile[nonzero_it_load_ts] \
-                                       - prop_nonzero_it_load, 0) / prop_nonzero_it_load)
+    infeas_list = list(np.maximum(load_profile[nonzero_it_load_ts] - prop_nonzero_it_load, 0) / prop_nonzero_it_load)
     n_infeas_check += len(prop_nonzero_it_load)
     
     n_default_infeas = 0
     # loop over ts with zero IT load
     for t in range(n_ts):
-        if not t in nonzero_it_load_ts and load_profile[t] > 0:
+        if t not in nonzero_it_load_ts and load_profile[t] > 0:
             n_default_infeas += 1
     
     # Check that HP load prof. be non-negative
@@ -74,6 +71,7 @@ def check_data_center_feasibility(load_profile: np.ndarray, cop_cs: float,
 
     # calculate and return infeasibility score    
     return calculate_infeas_score(n_infeas_check, infeas_list, n_default_infeas)
+
 
 def check_charging_station_feasibility(load_profiles: np.ndarray, n_ev_normal_charging: int,
                                        n_ev_fast_charging: int, t_ev_dep: np.ndarray,
@@ -204,6 +202,7 @@ def check_charging_station_feasibility(load_profiles: np.ndarray, n_ev_normal_ch
 
     return cs_dep_soc_penalty, infeas_score, n_infeas_by_type, detailed_infeas_list
 
+
 def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, charge_eff: float, discharge_eff: float,
                                 ev_arrival_time: int, delta_t_s: int) -> np.array:
     """
@@ -228,8 +227,8 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
 
     return ev_batt_soc
 
-def check_solar_farm_feasibility(load_profile: np.ndarray, batt_capa: float,
-                                 batt_max_power: float, charge_eff: float,
+
+def check_solar_farm_feasibility(load_profile: np.ndarray, batt_capa: float, batt_max_power: float, charge_eff: float,
                                  discharge_eff: float, n_ts: int, delta_t_s: int) -> float:
     """
     Check battery load profile obtained from the Solar Farm module. Note: idem

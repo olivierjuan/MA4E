@@ -7,18 +7,27 @@ class SolarFarmAgent:
     def __init__(self, env: SolarFarmEnv):
         self.env = env
 
-    def take_decision(self,
-                      state,
-                      previous_state=None,
-                      previous_action=None,
-                      previous_reward=None):
-        a = self.env.action_space.sample()
-        a = (np.tanh(state['manager_signal'])) / 10
-        if state['soc'] + a[0] * 0.5 > self.env.battery.capacity:
-            a[0] = (self.env.battery.capacity - state['soc']) * 2
-        if state['soc'] + a[0] * 0.5 < 0:
-            a[0] = - state['soc'] * 2
-        return a
+    def take_decision(self, state, n_fut_time_slots: int = 48):
+        return self.take_baseline_decision(state=state, n_fut_time_slots=n_fut_time_slots)
+
+    def take_baseline_decision(self, state, n_fut_time_slots: int = 48):
+        # get current State-of-Charge of battery
+        current_soc = state['soc']
+        # get forecast of PV prod. profile
+        pv_profile_forecast = self.env.observation_space["pv_prevision"]
+        # get - static - battery parameters
+        battery_capa = self.env.battery.capacity
+        max_power = self.env.battery.pmax
+        charging_efficiency = self.env.battery.efficiency
+        # apply very simple policy
+        baseline_decision = np.zeros(n_fut_time_slots)
+        for t in range(n_fut_time_slots):
+            baseline_decision[t] = min(pv_profile_forecast[t],
+                                       (battery_capa - current_soc) / charging_efficiency,
+                                       max_power)
+            # update current value of SOC
+            current_soc += baseline_decision[t]
+        return baseline_decision
 
 
 if __name__ == "__main__":
