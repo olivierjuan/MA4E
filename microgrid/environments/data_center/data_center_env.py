@@ -16,10 +16,10 @@ class DataCenterEnv(gym.Env):
 
         self.observation_space = spaces.Dict(
             {
-                'datetime': spaces.Space[datetime.datetime]((), np.datetime64, seed),
+                'now': spaces.Space[datetime.datetime]((), np.datetime64, seed),
                 'manager_signal': spaces.Box(low=-np.inf, high=np.inf, shape=(nb_pdt,)),
-                'consumption_prevision': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
-                'hotwater_price_prevision': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
+                'consumption_forecast': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
+                'hotwater_price_forecast': spaces.Box(low=0.0, high=np.inf, shape=(nb_pdt,)),
             }
         )
         # the action is alpha_t
@@ -48,29 +48,29 @@ class DataCenterEnv(gym.Env):
 
     def _step_common(self, effective_alpha, penalties) -> Tuple[ObsType, float, bool, dict]:
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
-            'consumption_prevision': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
-            'hotwater_price_prevision': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'consumption_forecast': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'hotwater_price_forecast': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         reward = 0 if penalties == 0 else -1e5
-        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_alpha, 'datetime': self.now}
+        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_alpha, 'now': self.now}
 
     def reset(self, *args, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None)\
             -> Union[ObsType, Tuple[ObsType, dict]]:
         self.now, self.delta_t = tuple(args)
         self.data_center.reset()
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
-            'consumption_prevision': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
-            'hotwater_price_prevision': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'consumption_forecast': self.data_center.get_conso_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'hotwater_price_forecast': self.data_center.get_prices_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         return state
 
     def get_consumption(self, state: ObsType,  action: ActType) -> np.ndarray:
         dt = self.delta_t / datetime.timedelta(hours=1)
-        lit = state['consumption_prevision']
+        lit = state['consumption_forecast']
         hr = lit * self.COP_CS / self.EER
         lhp = hr / ((self.COP_HP - 1) * dt)
         return lit + action * lhp
