@@ -20,7 +20,7 @@ class Battery:
         self.pmax = pmax
         self.pmin = pmin if pmin is not None else -pmax
         self.efficiency = efficiency
-        self.initial_soc = initial_soc()
+        self.initial_soc = initial_soc
         self.soc = initial_soc() * capacity
 
     def reset(self):

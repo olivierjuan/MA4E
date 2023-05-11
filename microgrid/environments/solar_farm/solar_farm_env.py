@@ -21,10 +21,10 @@ class SolarFarmEnv(gym.Env):
 
         self.observation_space = spaces.Dict(
             {
-                'datetime': spaces.Space[datetime.datetime]((), np.datetime64, seed),
+                'now': spaces.Space[datetime.datetime]((), np.datetime64, seed),
                 'manager_signal': spaces.Box(low=-np.inf, high=np.inf, shape=(nb_pdt,)),
                 'soc': spaces.Box(low=0.0, high=self.battery.capacity, shape=(1,)),
-                'pv_prevision': spaces.Box(low=0.0, high=self.pv.pmax, shape=(nb_pdt,)),
+                'pv_forecast': spaces.Box(low=0.0, high=self.pv.pmax, shape=(nb_pdt,)),
             }
         )
         self.action_space = spaces.Box(low=self.battery.pmin, high=self.battery.pmax, shape=(nb_pdt,))
@@ -46,28 +46,28 @@ class SolarFarmEnv(gym.Env):
 
     def _step_common(self, effective_action, penalties) -> Tuple[ObsType, float, bool, dict]:
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'soc': self.battery.soc,
-            'pv_prevision': self.pv.get_pv_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'pv_forecast': self.pv.get_pv_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         reward = 0 if penalties == BatteryState.OK else -1e5
-        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_action, 'soc': self.battery.soc, 'datetime': self.now}
+        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_action, 'soc': self.battery.soc, 'now': self.now}
 
     def reset(self, *args, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None)\
             -> Union[ObsType, Tuple[ObsType, dict]]:
         self.now, self.delta_t = tuple(args)
         self.battery.reset()
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'soc': self.battery.soc,
-            'pv_prevision': self.pv.get_pv_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
+            'pv_forecast': self.pv.get_pv_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]),
         }
         return state
 
     def get_consumption(self, state: ObsType,  action: ActType) -> np.ndarray:
-        return -state['pv_prevision'] + action
+        return -state['pv_forecast'] + action
 
     def render(self, mode="human"):
         pass

@@ -95,13 +95,10 @@ class Manager:
             env = agent.env
             data = agents_data[name]
             agent_state = data['state'].copy()
-            agent_state['datetime'] = now
+            agent_state['now'] = now
             agent_state['manager_signal'] = signal
             agent_action = agent.take_decision(
-                agent_state,
-                previous_state=data.get('state', None),
-                previous_action=data.get('action', None),
-                previous_reward=data.get('reward', None),
+                **agent_state
             )
             agent_new_state, reward, _, info = env.try_step(agent_action)
             consumption = env.get_consumption(agent_state, info['effective_action'])
