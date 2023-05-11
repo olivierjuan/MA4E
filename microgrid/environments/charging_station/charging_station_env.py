@@ -24,12 +24,10 @@ class ChargingStationEnv(gym.Env):
 
         self.observation_space = spaces.Dict(
             {
-                'datetime': spaces.Space[datetime.datetime]((), np.datetime64, seed),
+                'now': spaces.Space[datetime.datetime]((), np.datetime64, seed),
                 'manager_signal': spaces.Box(low=-np.inf, high=np.inf, shape=(nb_pdt,)),
                 'soc': spaces.Box(low=0.0, high=np.array([ev.battery.capacity for ev in self.evs]), shape=(self.nb_evs, )),
                 'is_plugged_prevision': spaces.Box(low=0.0, high=1.0, shape=(self.nb_evs, nb_pdt)),
-                'evs_pmax': spaces.Box(low=0.0, high=np.inf, shape=(self.nb_evs, )),
-                'station_pmax': spaces.Space[float]((), float, seed),
             }
         )
         low = np.array([[ev.battery.pmin for ev in self.evs] for _ in range(nb_pdt)]).transpose()
@@ -76,15 +74,13 @@ class ChargingStationEnv(gym.Env):
 
     def _step_common(self, effective_powers, penalties) -> Tuple[ObsType, float, bool, dict]:
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'soc': np.array([ev.get_soc(self.now) for ev in self.evs]),
             'is_plugged_prevision': np.array([ev.get_is_plugged_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]) for ev in self.evs]),
-            'evs_pmax': self.action_space.high[:, 0],
-            'station_pmax': self.pmax_site
         }
         reward = 0 if all(penalty == BatteryState.OK for penalty in penalties) else -1e5
-        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_powers, 'soc': [ev.battery.soc for ev in self.evs], 'datetime': self.now}
+        return state, reward, False, {'reward': reward, 'penalties': penalties, 'effective_action': effective_powers, 'soc': [ev.battery.soc for ev in self.evs], 'now': self.now}
 
     def reset(self, *args, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None)\
             -> Union[ObsType, Tuple[ObsType, dict]]:
@@ -92,7 +88,7 @@ class ChargingStationEnv(gym.Env):
         for ev in self.evs:
             ev.reset()
         state = {
-            'datetime': self.now,
+            'now': self.now,
             'manager_signal': np.zeros(self.nb_pdt),
             'soc': np.array([ev.get_soc(self.now) for ev in self.evs]),
             'is_plugged_prevision': np.array([ev.get_is_plugged_prevision([self.now + i * self.delta_t for i in range(self.nb_pdt)]) for ev in self.evs]),

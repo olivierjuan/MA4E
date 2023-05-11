@@ -1,17 +1,25 @@
 import datetime
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
+import numpy as np
 
 
 class ChargingStationAgent:
     def __init__(self, env: ChargingStationEnv):
         self.env = env
+        self.nbr_evs = env.nb_evs
+        self.nbr_future_time_slots = env.nb_pdt
+        self.evs_capacity = np.array([ev.battery.capacity for ev in env.evs])
+        self.evs_pmax = np.array([ev.battery.pmax for ev in env.evs])
+        self.station_pmax = env.pmax_site
 
     def take_decision(self,
-                      state,
-                      previous_state=None,
-                      previous_action=None,
-                      previous_reward=None):
-        return self.take_baseline_decision()
+                      now: datetime.datetime,             # current datetime
+                      manager_signal: np.ndarray,         # in R^nbr_future_time_slots
+                      soc: np.ndarray,                    # in [0, battery_capacity(i)]^nbr_evs
+                      is_plugged_prevision: np.ndarray   # in {0, 1}^(nb_evs, nbr_future_time_slots)
+                      ) -> np.ndarray:  # in [0, evs_pmax(i)]^(nb_evs, nbr_future_time_slots)
+                                        # (each charger power profile)
+        return np.zeros((self.nbr_evs, self.nbr_future_time_slots))
 
     def take_baseline_decision(self):
         return 1
@@ -49,7 +57,7 @@ if __name__ == "__main__":
     now = datetime.datetime.now()
     state = env.reset(now, delta_t)
     for i in range(N*2):
-        action = agent.take_decision(state)
+        action = agent.take_decision(**state)
         state, reward, done, info = env.step(action)
         cumulative_reward += reward
         if done:
