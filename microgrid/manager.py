@@ -178,7 +178,7 @@ class Manager:
         iter_idx = 1
         dates = list(sorted(filter(lambda x: isinstance(x, datetime.datetime), self.data_bank.keys())))
         agents = list(filter(lambda x: not x.startswith('__'), self.data_bank[dates[0]].keys()))
-        pv_prof = [self.data_bank[date]['ferme']['state']['pv_prevision'][0] for date in dates]
+        pv_prof = [self.data_bank[date]['ferme']['state']['pv_forecast'][0] for date in dates]
         load_profiles = {mg_team_name:
                              {iter_idx: {agent: np.array([self.data_bank[date][agent]['consumption'][0] for date in dates])
                                          for agent in agents
@@ -260,6 +260,7 @@ class Manager:
                                      coord_method=coord_method, regions_map_file=regions_map_file)
 
         # get "improvement trajectory"
+        os.makedirs(os.path.join(current_dir, "run_synthesis"), exist_ok=True)
         list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \
                              for elt in os.listdir(os.path.join(current_dir, "run_synthesis")) \
                              if (os.path.isdir(elt) and elt.startswith("run_"))]
