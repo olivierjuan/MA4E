@@ -1,5 +1,6 @@
 import datetime
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
+from microgrid.agents.internal.check_feasibility import check_solar_farm_feasibility
 import numpy as np
 
 
@@ -20,10 +21,11 @@ class SolarFarmAgent:
                       pv_forecast: np.ndarray      # in R+^nbr_future_time_slots
                       ) -> np.ndarray:             # in R^nbr_future_time_slots (battery power profile)
         baseline_decision = self.take_baseline_decision(soc=soc, pv_forecast=pv_forecast)
-        check = self.check_decision(baseline_decision)
-        # TODO check empty check
-        return self.take_baseline_decision(soc=soc,
-                                           pv_forecast=pv_forecast)
+        check_msg = self.check_decision(load_profile=baseline_decision)
+        # format or infeasiblity pb? Look at the check_msg
+        print(f"Format or infeas. errors: {check_msg}")
+
+        return baseline_decision
 
     def take_baseline_decision(self,
                                soc: float,                  # in [0, battery_capacity]
@@ -45,7 +47,9 @@ class SolarFarmAgent:
             current_soc += baseline_decision[t]
         return baseline_decision
 
-    def check_decision(self, load_profile):
+    def check_decision(self, load_profile) -> dict:
+        check_msg, check_score = check_solar_farm_feasibility(solar_farm_env=self.env, load_profile=load_profile)
+        return check_msg
 
 
 if __name__ == "__main__":

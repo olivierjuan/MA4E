@@ -12,6 +12,7 @@ import numpy as np
 from typing import Dict, List, Union
 from microgrid.assets.battery import Battery
 from microgrid.agents.data_center_agent import DataCenterAgent
+from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from microgrid.agents.charging_station_agent import ChargingStationEnv
 
 
@@ -167,9 +168,9 @@ def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profi
     # Check that HP load prof. be non-negative
     n_default_infeas += len(np.where(load_profile < 0)[0])
 
-    # check msg
+    # Set check msg
     if len(infeas_list) > 0:
-        check_msg["bounds"] = "nok"
+        check_msg["infeas"] = {"bounds": len(infeas_list)}
 
     # calculate and return infeasibility score
     return check_msg, calculate_infeas_score(n_infeas_check=n_infeas_check, infeas_list=infeas_list,
@@ -298,51 +299,54 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     return cs_dep_soc_penalty, infeas_score, n_infeas_by_type, detailed_infeas_list
 
 
-def check_solar_farm_feasibility(load_profile: np.ndarray, batt_capa: float, batt_max_power: float, charge_eff: float,
-                                 discharge_eff: float, n_ts: int, delta_t_s: int) -> float:
+def check_solar_farm_feasibility(solar_farm_env: SolarFarmEnv, load_profile: np.ndarray) -> (Dict[str, str], float):
     """
     Check battery load profile obtained from the Solar Farm module. Note: idem
     Industrial Site feas. check in the current version of the modelling
     
     :param load_profile: vector with battery load
-    :param batt_capa: battery capacity
-    :param batt_max_power: batt max (charge and discharge) power
-    :param charge_eff: charging efficiency
-    :param discharge_eff: discharging efficiency
-    :param n_ts: number of time-slots
-    :param delta_t_s: time-slot duration, in seconds
     :return: returns the infeasibility score
     """
+    n_ts = solar_farm_env.nb_pdt
+    delta_t_s = int(solar_farm_env.delta_t.total_seconds())
+    check_msg = {}
 
     agent_type = "solar_farm"
     type_and_size_check = \
         check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        return WRONG_FORMAT_SCORE, {}
+        check_msg["format"] = MSG_ERROR_TYPE_OR_SIZE
+        return check_msg, WRONG_FORMAT_SCORE
 
-    return check_industrial_cons_feasibility(load_profile, batt_capa, batt_max_power, charge_eff, discharge_eff,
-                                             n_ts, delta_t_s)
+    # create Battery object
+    battery = Battery(capacity=solar_farm_env.battery.capacity, pmax=solar_farm_env.battery.pmax,
+                      efficiency=solar_farm_env.battery.efficiency)
+
+    return check_battery_load_profile_feasibility(agent_type="solar_farm", load_profile=load_profile, battery=battery,
+                                                  n_ts=n_ts, delta_t_s=delta_t_s)
 
 
-def check_industrial_cons_feasibility(load_profile: np.ndarray, battery: Battery, n_ts: int, delta_t_s: int) -> float:
+def check_battery_load_profile_feasibility(agent_type: str, load_profile: np.ndarray, battery: Battery, n_ts: int,
+                                           delta_t_s: int) -> (Dict[str, str], float):
     """
-    Check battery load profile obtained from the Industrial Cons. module
-    
+    Check battery load profile obtained from an agent module
+
+    :param agent_type: type of the agent for which this test is done, e.g. solar_farm
     :param load_profile: vector with battery load
-    :param battery: the Battery object on industrial site
+    :param battery: the Battery object on this agent site
     :param n_ts: number of time-slots
     :param delta_t_s: time-slot duration, in seconds
-    :return: returns the infeasibility score
+    :return: returns the check message and infeasibility score
     """
-    type_and_size_check = check_load_profile_type_and_size(agent_type="industrial_consumer",
-                                                           load_profile=load_profile, n_ts=n_ts)
+    check_msg = {}
 
-    if not (isinstance(load_profile, np.ndarray) and load_profile.shape == (n_ts,)):
-        print("Wrong format for Industrial Site load profile, should be (%i,)" % n_ts)
-        
-        return WRONG_FORMAT_SCORE, {}
-    
+    type_and_size_check = check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
+    if any([check_status is False for check_status in type_and_size_check.values()]):
+        print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
+        check_msg["format"] = MSG_ERROR_TYPE_OR_SIZE
+        return check_msg, WRONG_FORMAT_SCORE
+
     infeas_list = []
     n_default_infeas = 0
     n_infeas_by_type = {"batt_max_p": 0, "soc_max_bound": 0, "soc_min_bound": 0}
@@ -371,7 +375,9 @@ def check_industrial_cons_feasibility(load_profile: np.ndarray, battery: Battery
     # calculate infeasibility score
     infeas_score = calculate_infeas_score(n_infeas_check, infeas_list, n_default_infeas)
 
-    return infeas_score, n_infeas_by_type
+    check_msg["infeas"] = n_infeas_by_type
+
+    return check_msg, infeas_score
 
 
 if __name__ == "__main__":

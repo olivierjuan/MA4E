@@ -1,6 +1,6 @@
 import datetime
 from microgrid.environments.data_center.data_center_env import DataCenterEnv
-from microgrid.agents.internal.check_feasibility import check_data_center_feasibility
+#from microgrid.agents.internal.check_feasibility import check_data_center_feasibility
 import numpy as np
 
 
@@ -25,10 +25,10 @@ class DataCenterAgent:
                       ) -> np.ndarray:  # in [0,1]^nbr_future_time_slots (heat pump activation profile)
         return np.zeros(self.nbr_future_time_slots)
 
-    def check_decision(self, load_profile, it_load_profile):
-        check_msg, check_score = check_data_center_feasibility(data_center_agent=self, load_profile=load_profile,
-                                                               it_load_profile=it_load_profile)
-        return check_msg, check_score
+    # def check_decision(self, load_profile, it_load_profile):
+    #     check_msg, check_score = check_data_center_feasibility(data_center_agent=self, load_profile=load_profile,
+    #                                                            it_load_profile=it_load_profile)
+    #     return check_msg, check_score
 
 
 if __name__ == "__main__":
