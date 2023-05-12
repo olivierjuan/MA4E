@@ -8,6 +8,7 @@ class ChargingStationAgent:
         self.env = env
         self.nbr_evs = env.nb_evs
         self.nbr_future_time_slots = env.nb_pdt
+        self.delta_t = env.delta_t
         self.evs_capacity = np.array([ev.battery.capacity for ev in env.evs])
         self.evs_pmax = np.array([ev.battery.pmax for ev in env.evs])
         self.station_pmax = env.pmax_site

@@ -7,6 +7,7 @@ class SolarFarmAgent:
     def __init__(self, env: SolarFarmEnv):
         self.env = env
         self.nbr_future_time_slots = env.nb_pdt
+        self.delta_t = env.delta_t
         self.battery_capacity = env.battery.capacity
         self.battery_pmax = env.battery.pmax
         self.battery_efficiency = env.battery.efficiency
@@ -18,14 +19,13 @@ class SolarFarmAgent:
                       soc: float,                  # in [0, battery_capacity]
                       pv_forecast: np.ndarray      # in R+^nbr_future_time_slots
                       ) -> np.ndarray:             # in R^nbr_future_time_slots (battery power profile)
-        return self.take_baseline_decision(now=now,
-                                           manager_signal=manager_signal,
-                                           soc=soc,
+        baseline_decision = self.take_baseline_decision(soc=soc, pv_forecast=pv_forecast)
+        check = self.check_decision(baseline_decision)
+        # TODO check empty check
+        return self.take_baseline_decision(soc=soc,
                                            pv_forecast=pv_forecast)
 
     def take_baseline_decision(self,
-                               now: datetime.datetime,      # current datetime
-                               manager_signal: np.ndarray,  # in R^nbr_future_time_slots
                                soc: float,                  # in [0, battery_capacity]
                                pv_forecast: np.ndarray      # in R+^nbr_future_time_slots
                                ) -> np.ndarray:             # in R^nbr_future_time_slots (battery power profile)
@@ -44,6 +44,8 @@ class SolarFarmAgent:
             # update current value of SOC
             current_soc += baseline_decision[t]
         return baseline_decision
+
+    def check_decision(self, load_profile):
 
 
 if __name__ == "__main__":

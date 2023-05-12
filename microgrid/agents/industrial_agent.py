@@ -7,6 +7,7 @@ class IndustrialAgent:
     def __init__(self, env: IndustrialEnv):
         self.env = env
         self.nbr_future_time_slots = env.nb_pdt
+        self.delta_t = env.delta_t
         self.battery_capacity = env.battery.capacity
         self.battery_pmax = env.battery.pmax
         self.battery_efficiency = env.battery.efficiency

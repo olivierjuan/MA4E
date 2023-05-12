@@ -12,7 +12,8 @@ from microgrid.assets.building import Building
 
 
 class IndustrialEnv(gym.Env):
-    def __init__(self, industrial_config: dict, nb_pdt=24, seed: Optional[int] = None):
+    def __init__(self, industrial_config: dict, nb_pdt=24, delta_t: datetime.timedelta = datetime.timedelta(minutes=30),
+                 seed: Optional[int] = None):
         self.battery_config = industrial_config['battery']
         self.building_config = industrial_config['building']
         self.nb_pdt = nb_pdt
@@ -29,7 +30,7 @@ class IndustrialEnv(gym.Env):
         )
         self.action_space = spaces.Box(low=-self.battery.pmax, high=self.battery.pmax, shape=(nb_pdt,))
         self.now = None
-        self.delta_t = None
+        self.delta_t = delta_t
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
         soc, effective_power, penalties = self.battery.charge(action[0], delta_t=self.delta_t)

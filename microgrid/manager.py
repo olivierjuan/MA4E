@@ -326,15 +326,15 @@ if __name__ == "__main__":
         modI = importlib.import_module(f'microgrid.agents.industrial_agent')
         modDC = importlib.import_module(f'microgrid.agents.data_center_agent')
         agents = {
-            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N)),
-            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N)),
-            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=configs['industrial_config'], nb_pdt=N)),
-            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=configs['data_center_config'], nb_pdt=N)),
+            'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N, delta_t=delta_t)),
+            'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N, delta_t=delta_t)),
+            'industrie': modI.IndustrialAgent(IndustrialEnv(industrial_config=configs['industrial_config'], nb_pdt=N, delta_t=delta_t)),
+            'datacenter': modDC.DataCenterAgent(DataCenterEnv(data_center_config=configs['data_center_config'], nb_pdt=N, delta_t=delta_t)),
         }
         manager = MyManager(agents,
                             delta_t=delta_t,
                             horizon=time_horizon,
-                            simulation_horizon=datetime.timedelta(days=1), # durée de la glissade
+                            simulation_horizon=datetime.timedelta(days=1),  # durée de la glissade
                             max_iterations=10, # nombre d'iterations de convergence des prix
                             )
         manager.run()

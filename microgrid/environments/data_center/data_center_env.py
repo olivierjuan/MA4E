@@ -10,7 +10,8 @@ import datetime
 
 
 class DataCenterEnv(gym.Env):
-    def __init__(self, data_center_config: dict, nb_pdt=24, seed: Optional[int] = None):
+    def __init__(self, data_center_config: dict, nb_pdt=24,
+                 delta_t: datetime.timedelta = datetime.timedelta(minutes=30), seed: Optional[int] = None):
         self.nb_pdt = nb_pdt
         self.data_center = DataCenter(**data_center_config)
 
@@ -25,7 +26,7 @@ class DataCenterEnv(gym.Env):
         # the action is alpha_t
         self.action_space = spaces.Box(low=0, high=1.0, shape=(nb_pdt,))
         self.now = None
-        self.delta_t = None
+        self.delta_t = delta_t
         # constant problem data
         self.Tcom = self.data_center.Tcom
         self.Tr = self.data_center.Tr

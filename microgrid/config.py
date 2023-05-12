@@ -1,5 +1,6 @@
 import random
 
+
 def get_configs(seed):
     random.seed(seed)
     solar_farm_config = {

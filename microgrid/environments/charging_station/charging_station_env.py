@@ -14,7 +14,8 @@ from microgrid.assets.ev import EV
 # TODO : ajouter la gestion des vehicules lents/rapides
 
 class ChargingStationEnv(gym.Env):
-    def __init__(self, station_config: dict, nb_pdt=24, seed: Optional[int] = None):
+    def __init__(self, station_config: dict, nb_pdt=24, delta_t: datetime.timedelta = datetime.timedelta(minutes=30),
+                 seed: Optional[int] = None):
         self.station_config = station_config
         self.evs_config = station_config['evs']
         self.nb_pdt = nb_pdt
@@ -34,7 +35,7 @@ class ChargingStationEnv(gym.Env):
         high = np.array([[ev.battery.pmax for ev in self.evs] for _ in range(nb_pdt)]).transpose()
         self.action_space = spaces.Box(low=low, high=high, shape=(self.nb_evs, nb_pdt), dtype=np.float64)
         self.now = None
-        self.delta_t = None
+        self.delta_t = delta_t
         self.n_coord_step = None
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
