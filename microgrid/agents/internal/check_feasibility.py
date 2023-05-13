@@ -11,10 +11,10 @@ Created on Fri May 28 19:19:33 2021
 import numpy as np
 from typing import Dict, List, Union
 from microgrid.assets.battery import Battery
-from microgrid.agents.data_center_agent import DataCenterAgent
+from microgrid.environments.data_center.data_center_env import DataCenterEnv
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
-from microgrid.agents.charging_station_agent import ChargingStationEnv
+from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 
 
 WRONG_FORMAT_SCORE = 1000
@@ -120,18 +120,38 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
     return ev_batt_soc
 
 
-def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profile: Union[np.ndarray, list],
+def get_ev_arr_and_dep_ts(is_plugged: np.ndarray) -> (List[list], List[list]):
+    """
+    Get per EV lists of arrival and departure times based on plugged-in states
+    Args:
+        is_plugged: matrix n_ev*n_ts containing plugged-in states, 1 if plugged/0 if not
+
+    Returns:
+        t_arr: list of list of arrival times per EV
+        t_dep: idem, for departure times
+    """
+    n_ev = len(is_plugged)
+    t_arr = []
+    t_dep = []
+    delta_is_plugged = is_plugged[:, 1:] - is_plugged[:, :-1]
+    for i_ev in range(n_ev):
+        t_arr.append(list(np.where(delta_is_plugged[i_ev, :] == 1)[0] + 1))
+        t_dep.append(list(np.where(delta_is_plugged[i_ev, :] == -1)[0] + 1))
+    return t_arr, t_dep
+
+
+def check_data_center_feasibility(data_center_env: DataCenterEnv, load_profile: Union[np.ndarray, list],
                                   it_load_profile: np.ndarray) -> (Dict[str, str], float):
     """
     Check heat pump load profile obtained from the DC module
 
-    :param data_center_agent: the DataCenterAgent object for which load profile must be checked
+    :param data_center_env: the DataCenterEnv object for which load profile must be checked
     :param load_profile: vector (1, n_ts) with heat pump load profile
     :param it_load_profile: IT load profile
     :return: returns a dict with all errors and the "global" infeasibility score
     """
-    n_ts = data_center_agent.nbr_future_time_slots
-    delta_t_s = int(data_center_agent.delta_t.total_seconds())
+    n_ts = data_center_env.nb_pdt
+    delta_t_s = int(data_center_env.delta_t.total_seconds())
     check_msg = {}
 
     # TODO OJ: obtenir IT load directement à partir de l'objet data_center?
@@ -152,11 +172,13 @@ def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profi
 
     # check that DC load is non-negative and smaller than IT load up to a proportional coeff.
     n_infeas_check = 0  # number of constraints checked (to normalize the infeas. score at the end)
+    n_infeas_by_type = {"dc_min_p": 0, "dc_max_p": 0}
+    # TODO feed n_infeas_by_type
 
     # identify time-slots with non-zero IT cons.
     nonzero_it_load_ts = np.where(it_load_profile > 0)[0]
-    prop_nonzero_it_load = data_center_agent.COP_CS \
-                           / (data_center_agent.EER * (data_center_agent.COP_HP - 1) * delta_t_s) \
+    prop_nonzero_it_load = data_center_env.COP_CS \
+                           / (data_center_env.EER * (data_center_env.COP_HP - 1) * delta_t_s) \
                            * it_load_profile[nonzero_it_load_ts]
     infeas_list = list(np.maximum(load_profile[nonzero_it_load_ts] - prop_nonzero_it_load, 0) / prop_nonzero_it_load)
     n_infeas_check += len(prop_nonzero_it_load)
@@ -171,29 +193,30 @@ def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profi
     n_default_infeas += len(np.where(load_profile < 0)[0])
 
     # Set check msg
-    if len(infeas_list) > 0:
-        check_msg["infeas"] = {"bounds": len(infeas_list)}
+    if sum(n_infeas_by_type.values()) > 0:
+        check_msg["infeas"] = n_infeas_by_type
+    else:
+        check_msg["infeas"] = "ok"
 
     # calculate and return infeasibility score
     return check_msg, calculate_infeas_score(n_infeas_check=n_infeas_check, infeas_list=infeas_list,
                                              n_default_infeas=n_default_infeas)
 
 
-def check_charging_station_feasibility(charging_station_env: ChargingStationEnv, load_profiles: np.ndarray,
-                                       t_ev_dep: np.ndarray, t_ev_arr: np.ndarray,
-                                       dep_soc_penalty: float) -> (float, float):
+def check_charging_station_feasibility(charging_station_env: ChargingStationEnv, load_profile: np.ndarray,
+                                       is_plugged_forecast: np.ndarray,
+                                       dep_soc_penalty: float) -> (Dict[str, str], float):
     """
     Check EV load profiles obtained from the charging station module
 
     :param charging_station_env: ChargingStationEnv object, from which the main params necessary for this
     check can be obtained
-    :param load_profiles: matrix with a line per EV charging profile.
-    :param t_ev_dep: time-slots of dep.
-    :param t_ev_arr: idem for arr (after dep. here, back from work)
+    :param load_profile: matrix with a line per EV charging profile.
+    :param is_plugged_forecast: matrix with plugged-in state forecast (1 if plugged-in, 0 if not)
     :param dep_soc_penalty: value of the penalty to be added to the objective if EV SoC at departure is below 25% of
     battery capa
-    :return: returns the obj. penalty (for not being charged at a minimum SOC of 4kWh at dep.) and the
-    infeasibility score
+    :return: returns the dict. of error msg, the global infeasibility score and the obj. penalty (for not being charged
+    at a minimum SOC of 4kWh at dep.)
     """
     n_ts = charging_station_env.nb_pdt
     delta_t_s = int(charging_station_env.delta_t.total_seconds())
@@ -202,14 +225,17 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     # get a few params
     n_ev = len(charging_station_env.evs)
     agent_type = "charging_station"
-    type_and_size_check = check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profiles,
+    type_and_size_check = check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile,
                                                            n_ts=n_ts, n_ev=n_ev)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
         check_msg["format"] = type_and_size_check
-        return None, WRONG_FORMAT_SCORE, {}
+        return check_msg, WRONG_FORMAT_SCORE, None
     else:
         check_msg["format"] = "ok"
+
+    # get EV dep. and arr. time-slots from plugged-in states
+    t_ev_arr, t_ev_dep = get_ev_arr_and_dep_ts(is_plugged=is_plugged_forecast)
 
     infeas_list = []
     detailed_infeas_list = []
@@ -218,12 +244,12 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
                         "soc_min_bound": 0, "min_soc_at_dep": 0, "cs_max_power": 0}
     n_infeas_check = 0  # number of constraints checked (to normalize the infeas. score at the end)
 
-    # check
+    # check feasibility
     # 1. that indiv. charging powers respect the indiv. max. and min. power limits
     for i_ev in range(n_ev):
         # max power
         pmax = charging_station_env.evs[i_ev].battery.pmax
-        indiv_max_power_check = list(np.maximum(load_profiles[i_ev, :] - pmax, 0) / pmax)
+        indiv_max_power_check = list(np.maximum(load_profile[i_ev, :] - pmax, 0) / pmax)
         infeas_list.extend(indiv_max_power_check)
         n_infeas_check += n_ts
         # update infeas by type
@@ -233,7 +259,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
                                      for t in range(n_ts) if indiv_max_power_check[t] > 0])
         # and min power
         pmin = charging_station_env.evs[i_ev].battery.pmin
-        indiv_min_power_check = list(np.maximum(pmin - load_profiles[i_ev, :], 0) / pmin)
+        indiv_min_power_check = list(np.maximum(pmin - load_profile[i_ev, :], 0) / pmin)
         infeas_list.extend(indiv_min_power_check)
         n_infeas_check += n_ts
         # update infeas by type
@@ -245,8 +271,9 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     # 0 charging power when EV is not connected (convention that EV leave at the end
     # of time-slot t_dep and arrive at the beginning of t_arr -> can charge in both ts)
     for i_ev in range(n_ev):
-        # TODO OJ: get directly t_ev_dep and t_ev_arr from ev.data?
-        charge_when_plugged_check = np.where(np.abs(load_profiles[i_ev, t_ev_dep[i_ev]+1:t_ev_arr[i_ev]-1]) > 0)[0]
+        # list of time-slots for which EV i_ev is not plugged
+        ts_not_plugged = list(np.where(is_plugged_forecast[i_ev, :] == 0)[0])
+        charge_when_plugged_check = np.where(np.abs(load_profile[i_ev, ts_not_plugged]) > 0)[0]
         n_charge_out_of_cs = len(charge_when_plugged_check)
         n_default_infeas += n_charge_out_of_cs
         # update infeas by type
@@ -258,11 +285,11 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     cs_dep_soc_penalty = 0
     for i_ev in range(n_ev):
         # get a few params from charging station env.
-        ev_init_soc = charging_station_env.evs[i_ev].battery.initial_soc
+        ev_init_soc = charging_station_env.evs[i_ev].battery.soc
         ev_batt_capa = charging_station_env.evs[i_ev].battery.capacity
         charge_eff = charging_station_env.evs[i_ev].battery.efficiency
         current_batt_soc = \
-            calculate_ev_soc_trajectory(ev_init_soc=ev_init_soc, load_profile=load_profiles[i_ev, :],
+            calculate_ev_soc_trajectory(ev_init_soc=ev_init_soc, load_profile=load_profile[i_ev, :],
                                         charge_eff=charge_eff, discharge_eff=charge_eff,
                                         ev_arrival_time=t_ev_arr[i_ev], delta_t_s=delta_t_s)
 
@@ -282,16 +309,17 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         # and store detailed infeasibilities
         detailed_infeas_list.extend([f"ev{i_ev}_min_soc_t{t}" for t in min_soc_check])
 
-        # SoC at dep. is above the minimal level requested
-        if current_batt_soc[t_ev_dep[i_ev]] < 0.25 * ev_batt_capa:
-            cs_dep_soc_penalty += dep_soc_penalty
-            n_infeas_by_type["min_soc_at_dep"] += 1
-            detailed_infeas_list.append(f"ev{i_ev}_min_soc_at_dep_t{t_ev_dep[i_ev]}")
-        n_infeas_check += 1
+        # SoC at (potentially multiple) dep. is above the minimal level requested
+        for t_dep in t_ev_dep[i_ev]:
+            if current_batt_soc[t_dep] < 0.25 * ev_batt_capa:
+                cs_dep_soc_penalty += dep_soc_penalty
+                n_infeas_by_type["min_soc_at_dep"] += 1
+                detailed_infeas_list.append(f"ev{i_ev}_min_soc_at_dep_t{t_ev_dep[i_ev]}")
+            n_infeas_check += 1
 
     # 3.that CS power is below the max allowed value
     cs_max_power = charging_station_env.pmax_site
-    charging_station_max_power_check = list(np.maximum(np.abs(np.sum(load_profiles, axis=0))
+    charging_station_max_power_check = list(np.maximum(np.abs(np.sum(load_profile, axis=0))
                                                        - cs_max_power, 0) / cs_max_power)
     infeas_list.extend(charging_station_max_power_check)
     n_infeas_check += n_ts
@@ -303,7 +331,13 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     # calculate infeasibility score
     infeas_score = calculate_infeas_score(n_infeas_check, infeas_list, n_default_infeas)
 
-    return cs_dep_soc_penalty, infeas_score, n_infeas_by_type, detailed_infeas_list
+    # Set check msg
+    if sum(n_infeas_by_type.values()) > 0:
+        check_msg["infeas"] = n_infeas_by_type
+    else:
+        check_msg["infeas"] = "ok"
+
+    return check_msg, infeas_score, cs_dep_soc_penalty
 
 
 def check_solar_farm_feasibility(solar_farm_env: SolarFarmEnv, load_profile: np.ndarray) -> (Dict[str, str], float):
