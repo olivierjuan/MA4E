@@ -13,10 +13,10 @@ from typing import Dict, List, Union
 from microgrid.assets.battery import Battery
 from microgrid.agents.data_center_agent import DataCenterAgent
 from microgrid.environments.solar_farm.solar_farm_env import SolarFarmEnv
+from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.agents.charging_station_agent import ChargingStationEnv
 
 
-MSG_ERROR_TYPE_OR_SIZE = "Error type or size"
 WRONG_FORMAT_SCORE = 1000
 PU_INFEAS_SCORE = 0.1
 DEFAULT_PU_INFEAS_SCORE = 0.01 # when 0 value is the one to be obtained, no relative deviation can be calc.
@@ -145,8 +145,10 @@ def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profi
         check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        check_msg["format"] = MSG_ERROR_TYPE_OR_SIZE
+        check_msg["format"] = type_and_size_check
         return check_msg, WRONG_FORMAT_SCORE
+    else:
+        check_msg["format"] = "ok"
 
     # check that DC load is non-negative and smaller than IT load up to a proportional coeff.
     n_infeas_check = 0  # number of constraints checked (to normalize the infeas. score at the end)
@@ -178,7 +180,7 @@ def check_data_center_feasibility(data_center_agent: DataCenterAgent, load_profi
 
 
 def check_charging_station_feasibility(charging_station_env: ChargingStationEnv, load_profiles: np.ndarray,
-                                       t_ev_dep: np.ndarray, t_ev_arr: np.ndarray, n_ts: int, delta_t_s: int,
+                                       t_ev_dep: np.ndarray, t_ev_arr: np.ndarray,
                                        dep_soc_penalty: float) -> (float, float):
     """
     Check EV load profiles obtained from the charging station module
@@ -188,13 +190,15 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     :param load_profiles: matrix with a line per EV charging profile.
     :param t_ev_dep: time-slots of dep.
     :param t_ev_arr: idem for arr (after dep. here, back from work)
-    :param n_ts: number of time-slots
-    :param delta_t_s: time-slot duration, in seconds
     :param dep_soc_penalty: value of the penalty to be added to the objective if EV SoC at departure is below 25% of
     battery capa
     :return: returns the obj. penalty (for not being charged at a minimum SOC of 4kWh at dep.) and the
     infeasibility score
     """
+    n_ts = charging_station_env.nb_pdt
+    delta_t_s = int(charging_station_env.delta_t.total_seconds())
+    check_msg = {}
+
     # get a few params
     n_ev = len(charging_station_env.evs)
     agent_type = "charging_station"
@@ -202,7 +206,10 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
                                                            n_ts=n_ts, n_ev=n_ev)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
+        check_msg["format"] = type_and_size_check
         return None, WRONG_FORMAT_SCORE, {}
+    else:
+        check_msg["format"] = "ok"
 
     infeas_list = []
     detailed_infeas_list = []
@@ -303,7 +310,7 @@ def check_solar_farm_feasibility(solar_farm_env: SolarFarmEnv, load_profile: np.
     """
     Check battery load profile obtained from the Solar Farm module. Note: idem
     Industrial Site feas. check in the current version of the modelling
-    
+    :param solar_farm_env: Solar Farm environment
     :param load_profile: vector with battery load
     :return: returns the infeasibility score
     """
@@ -316,14 +323,47 @@ def check_solar_farm_feasibility(solar_farm_env: SolarFarmEnv, load_profile: np.
         check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        check_msg["format"] = MSG_ERROR_TYPE_OR_SIZE
+        check_msg["format"] = type_and_size_check
         return check_msg, WRONG_FORMAT_SCORE
+    else:
+        check_msg["format"] = "ok"
 
     # create Battery object
     battery = Battery(capacity=solar_farm_env.battery.capacity, pmax=solar_farm_env.battery.pmax,
                       efficiency=solar_farm_env.battery.efficiency)
 
-    return check_battery_load_profile_feasibility(agent_type="solar_farm", load_profile=load_profile, battery=battery,
+    return check_battery_load_profile_feasibility(agent_type=agent_type, load_profile=load_profile, battery=battery,
+                                                  n_ts=n_ts, delta_t_s=delta_t_s)
+
+
+def check_industrial_site_feasibility(industrial_env: IndustrialEnv,
+                                      load_profile: np.ndarray) -> (Dict[str, str], float):
+    """
+    Check battery load profile obtained from the Industrial Site module. Note: idem
+    Solar Farm feas. check in the current version of the modelling
+    :param industrial_env: Industrial Site environment
+    :param load_profile: vector with battery load
+    :return: returns the infeasibility score
+    """
+    n_ts = industrial_env.nb_pdt
+    delta_t_s = int(industrial_env.delta_t.total_seconds())
+    check_msg = {}
+
+    agent_type = "industrial"
+    type_and_size_check = \
+        check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
+    if any([check_status is False for check_status in type_and_size_check.values()]):
+        print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
+        check_msg["format"] = type_and_size_check
+        return check_msg, WRONG_FORMAT_SCORE
+    else:
+        check_msg["format"] = "ok"
+
+    # create Battery object
+    battery = Battery(capacity=industrial_env.battery.capacity, pmax=industrial_env.battery.pmax,
+                      efficiency=industrial_env.battery.efficiency)
+
+    return check_battery_load_profile_feasibility(agent_type=agent_type, load_profile=load_profile, battery=battery,
                                                   n_ts=n_ts, delta_t_s=delta_t_s)
 
 
@@ -344,8 +384,10 @@ def check_battery_load_profile_feasibility(agent_type: str, load_profile: np.nda
     type_and_size_check = check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
     if any([check_status is False for check_status in type_and_size_check.values()]):
         print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        check_msg["format"] = MSG_ERROR_TYPE_OR_SIZE
+        check_msg["format"] = type_and_size_check
         return check_msg, WRONG_FORMAT_SCORE
+    else:
+        check_msg["format"] = "ok"
 
     infeas_list = []
     n_default_infeas = 0
@@ -375,7 +417,10 @@ def check_battery_load_profile_feasibility(agent_type: str, load_profile: np.nda
     # calculate infeasibility score
     infeas_score = calculate_infeas_score(n_infeas_check, infeas_list, n_default_infeas)
 
-    check_msg["infeas"] = n_infeas_by_type
+    if sum(n_infeas_by_type.values()) > 0:
+        check_msg["infeas"] = n_infeas_by_type
+    else:
+        check_msg["infeas"] = "ok"
 
     return check_msg, infeas_score
 

@@ -21,6 +21,7 @@ class SolarFarmAgent:
                       pv_forecast: np.ndarray      # in R+^nbr_future_time_slots
                       ) -> np.ndarray:             # in R^nbr_future_time_slots (battery power profile)
         baseline_decision = self.take_baseline_decision(soc=soc, pv_forecast=pv_forecast)
+        # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
         print(f"Format or infeas. errors: {check_msg}")
@@ -44,7 +45,7 @@ class SolarFarmAgent:
                 self.battery_pmax
             )
             # update current value of SOC
-            current_soc += baseline_decision[t]
+            current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1)
         return baseline_decision
 
     def check_decision(self, load_profile) -> dict:
