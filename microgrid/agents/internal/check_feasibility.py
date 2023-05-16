@@ -19,7 +19,7 @@ from microgrid.environments.charging_station.charging_station_env import Chargin
 
 WRONG_FORMAT_SCORE = 1000
 PU_INFEAS_SCORE = 0.1
-DEFAULT_PU_INFEAS_SCORE = 0.01 # when 0 value is the one to be obtained, no relative deviation can be calc.
+DEFAULT_PU_INFEAS_SCORE = 0.01  # when 0 value is the one to be obtained, no relative deviation can be calc.
 AGENT_TYPES = ["solar_farm", "data_center", "industrial", "charging_station"]
 ONE_DIM_AGENTS = list(set(AGENT_TYPES) - {"charging_station"})
 
@@ -96,7 +96,7 @@ def calculate_infeas_score(n_infeas_check: int, infeas_list: List[float], n_defa
 
 
 def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, charge_eff: float, discharge_eff: float,
-                                ev_arrival_time: int, delta_t_s: int) -> np.array:
+                                ev_arrival_times: List[int], delta_t_s: int) -> np.array:
     """
     Calculate EV state-of-charge trajectory
 
@@ -105,7 +105,7 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
         load_profile: load profile of this EV
         charge_eff: charging efficiency
         discharge_eff: discharging efficiency
-        ev_arrival_time: time-slot index corresponding to EV arrival
+        ev_arrival_times: time-slot index(ices) corresponding to EV arrival(s)
         delta_t_s (int): time-slot duration, in seconds
 
     Returns:
@@ -115,7 +115,8 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
     ev_batt_soc = ev_init_soc + (charge_eff * np.cumsum(np.maximum(load_profile, 0))
                                  - 1 / discharge_eff * np.cumsum(np.maximum(-load_profile, 0))) * delta_t_s / 3600
     # diminish SoC when arriving at CS with E quantity consumed when driving
-    ev_batt_soc[ev_arrival_time] -= 4
+    for arr_ts in ev_arrival_times:
+        ev_batt_soc[arr_ts] -= 4
 
     return ev_batt_soc
 
@@ -143,7 +144,8 @@ def get_ev_arr_and_dep_ts(is_plugged: np.ndarray) -> (List[list], List[list]):
 def check_data_center_feasibility(data_center_env: DataCenterEnv, load_profile: Union[np.ndarray, list],
                                   it_load_profile: np.ndarray) -> (Dict[str, str], float):
     """
-    Check heat pump load profile obtained from the DC module
+    Check heat pump load profile obtained from the DC module,
+    i.e. forall t, 0 <= l^HP(t) <= \frac{COP_{CS}}{EER*(COP_{HP}-1)*delta} l^IT(t)
 
     :param data_center_env: the DataCenterEnv object for which load profile must be checked
     :param load_profile: vector (1, n_ts) with heat pump load profile
@@ -154,7 +156,6 @@ def check_data_center_feasibility(data_center_env: DataCenterEnv, load_profile: 
     delta_t_s = int(data_center_env.delta_t.total_seconds())
     check_msg = {}
 
-    # TODO OJ: obtenir IT load directement à partir de l'objet data_center?
     # check proper IT load
     assert isinstance(it_load_profile, np.ndarray)
     assert it_load_profile.dtype == float
@@ -171,26 +172,31 @@ def check_data_center_feasibility(data_center_env: DataCenterEnv, load_profile: 
         check_msg["format"] = "ok"
 
     # check that DC load is non-negative and smaller than IT load up to a proportional coeff.
+    infeas_list = []
     n_infeas_check = 0  # number of constraints checked (to normalize the infeas. score at the end)
     n_infeas_by_type = {"dc_min_p": 0, "dc_max_p": 0}
-    # TODO feed n_infeas_by_type
 
-    # identify time-slots with non-zero IT cons.
+    hp_gamma = data_center_env.COP_CS / (data_center_env.EER * (data_center_env.COP_HP - 1) * delta_t_s)
+    # identify time-slots with negative load or load bigger than upper bound, depending on IT - nonflex. - load
+    # for time-slots with non-zero IT load (not "default" ts, following calculation in calc_infeas_score)
     nonzero_it_load_ts = np.where(it_load_profile > 0)[0]
-    prop_nonzero_it_load = data_center_env.COP_CS \
-                           / (data_center_env.EER * (data_center_env.COP_HP - 1) * delta_t_s) \
-                           * it_load_profile[nonzero_it_load_ts]
-    infeas_list = list(np.maximum(load_profile[nonzero_it_load_ts] - prop_nonzero_it_load, 0) / prop_nonzero_it_load)
+    prop_nonzero_it_load = hp_gamma * it_load_profile[nonzero_it_load_ts]
+    max_load_check = np.maximum(load_profile[nonzero_it_load_ts] - prop_nonzero_it_load, 0) / prop_nonzero_it_load
+    infeas_list.extend(list(max_load_check))
     n_infeas_check += len(prop_nonzero_it_load)
+    n_infeas_by_type["dc_max_p"] += len(np.where(max_load_check > 0)[0])
+    min_load_check = np.maximum(-load_profile[nonzero_it_load_ts], 0)
+    infeas_list.extend(list(min_load_check))
+    n_infeas_check += len(prop_nonzero_it_load)
+    n_infeas_by_type["dc_min_p"] += len(np.where(min_load_check > 0)[0])
 
     n_default_infeas = 0
     # loop over ts with zero IT load
     for t in range(n_ts):
         if t not in nonzero_it_load_ts and load_profile[t] > 0:
             n_default_infeas += 1
-
-    # Check that HP load prof. be non-negative
-    n_default_infeas += len(np.where(load_profile < 0)[0])
+            n_infeas_check += 1
+            n_infeas_by_type["dc_max_p"] += 1
 
     # Set check msg
     if sum(n_infeas_by_type.values()) > 0:
@@ -291,7 +297,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         current_batt_soc = \
             calculate_ev_soc_trajectory(ev_init_soc=ev_init_soc, load_profile=load_profile[i_ev, :],
                                         charge_eff=charge_eff, discharge_eff=charge_eff,
-                                        ev_arrival_time=t_ev_arr[i_ev], delta_t_s=delta_t_s)
+                                        ev_arrival_times=t_ev_arr[i_ev], delta_t_s=delta_t_s)
 
         # max bound (EV batt. capa)
         max_soc_check = list(np.maximum(current_batt_soc - ev_batt_capa, 0) / ev_batt_capa)
