@@ -48,10 +48,12 @@ class ChargingStationAgent:
                 if is_plugged_prevision[i_ev, t] == 1:
                     baseline_decision[i_ev, t] = \
                         min(p_ev,
-                            (self.evs_capacity[i_ev] - current_soc[i_ev]) / self.evs_efficiency[i_ev],
+                            (self.evs_capacity[i_ev] - current_soc[i_ev]) /
+                            (self.delta_t / datetime.timedelta(hours=1) * self.evs_efficiency[i_ev]),
                             self.evs_pmax[i_ev])
                 # update current value of SOC
-                current_soc[i_ev] += baseline_decision[i_ev, t] * self.delta_t / datetime.timedelta(hours=1)
+                current_soc[i_ev] += baseline_decision[i_ev, t] \
+                                     * self.delta_t / datetime.timedelta(hours=1) * self.evs_efficiency[i_ev]
         return baseline_decision
 
     def check_decision(self, load_profile, is_plugged_forecast: np.ndarray) -> dict:
