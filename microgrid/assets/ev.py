@@ -59,9 +59,7 @@ class EV:
         return self.battery.soc
 
     def get_soc(self, when: datetime.datetime):
-        if self.get_is_plugged(when, when):
-            return self.battery.soc
-        return 0
+        return self.battery.soc
 
 
 if __name__ == '__main__':

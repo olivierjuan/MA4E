@@ -116,7 +116,7 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
                                  - 1 / discharge_eff * np.cumsum(np.maximum(-load_profile, 0))) * delta_t_s / 3600
     # diminish SoC when arriving at CS with E quantity consumed when driving
     for arr_ts in ev_arrival_times:
-        ev_batt_soc[arr_ts] -= 4
+        ev_batt_soc[arr_ts:] -= 4
 
     return ev_batt_soc
 
@@ -303,7 +303,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         max_soc_check = list(np.maximum(current_batt_soc - ev_batt_capa, 0) / ev_batt_capa)
         infeas_list.extend(max_soc_check)
         n_infeas_check += n_ts
-        n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+        n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0.001)[0])
         # and store detailed infeasibilities
         detailed_infeas_list.extend([f"ev{i_ev}_max_soc_t{t}" for t in range(n_ts) if max_soc_check[t] > 0])
 

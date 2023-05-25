@@ -35,9 +35,10 @@ class ChargingStationAgent:
                                is_plugged_prevision: np.ndarray   # in {0, 1}^(nb_evs, nbr_future_time_slots)
                                ) -> np.ndarray:
         # get current State-of-Charge of EV batterieS
-        current_soc = soc
+        current_soc = soc.copy()
         # apply very simple policy
         baseline_decision = np.zeros([self.nbr_evs, self.nbr_future_time_slots])
+        delta_t_float = self.delta_t / datetime.timedelta(hours=1)
         for t in range(self.nbr_future_time_slots):
             # get number of plugged EVs at this time-slot
             n_ev_plugged = sum(is_plugged_prevision[:, t])
@@ -46,14 +47,14 @@ class ChargingStationAgent:
             # ensure compatibility with battery constraints
             for i_ev in range(self.nbr_evs):
                 if is_plugged_prevision[i_ev, t] == 1:
+                    delta_soc_max = (self.evs_capacity[i_ev] - current_soc[i_ev])
+                    max_power_to_soc_max = delta_soc_max / (delta_t_float * self.evs_efficiency[i_ev])
                     baseline_decision[i_ev, t] = \
                         min(p_ev,
-                            (self.evs_capacity[i_ev] - current_soc[i_ev]) /
-                            (self.delta_t / datetime.timedelta(hours=1) * self.evs_efficiency[i_ev]),
+                            max_power_to_soc_max,
                             self.evs_pmax[i_ev])
+                current_soc[i_ev] += baseline_decision[i_ev, t] * delta_t_float * self.evs_efficiency[i_ev]
                 # update current value of SOC
-                current_soc[i_ev] += baseline_decision[i_ev, t] \
-                                     * self.delta_t / datetime.timedelta(hours=1) * self.evs_efficiency[i_ev]
         return baseline_decision
 
     def check_decision(self, load_profile, is_plugged_forecast: np.ndarray) -> dict:
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     env = ChargingStationEnv(station_config=station_config, nb_pdt=N)
     agent = ChargingStationAgent(env)
     cumulative_reward = 0
-    now = datetime.datetime.now()
+    now = datetime.datetime.now().replace(hour=0)
     state = env.reset(now, delta_t)
     for i in range(N*2):
         action = agent.take_decision(**state)
