@@ -24,7 +24,8 @@ class SolarFarmAgent:
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
-        print(f"Format or infeas. errors: {check_msg}")
+        if check_msg['infeas'] != 'ok':
+            print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
 
@@ -41,7 +42,7 @@ class SolarFarmAgent:
         for t in range(self.nbr_future_time_slots):
             baseline_decision[t] = min(
                 pv_profile_forecast[t],
-                (self.battery_capacity - current_soc) / self.battery_efficiency,
+                (self.battery_capacity - current_soc) / (self.battery_efficiency * self.delta_t / datetime.timedelta(hours=1)),
                 self.battery_pmax
             )
             # update current value of SOC
@@ -76,9 +77,12 @@ if __name__ == "__main__":
     cumulative_reward = 0
     now = datetime.datetime.now()
     state = env.reset(now, delta_t)
+    signal = np.ones(N*2)
     for i in range(N*2):
+        state['manager_signal'] = signal
         action = agent.take_decision(**state)
         state, reward, done, info = env.step(action)
+        signal
         cumulative_reward += reward
         if done:
             break

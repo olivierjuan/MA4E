@@ -16,7 +16,8 @@ from matplotlib import pyplot as plt
 from create_ppt_summary_of_run import PptSynthesis, set_to_multiple_scenarios_format
 from calc_output_metrics import subselec_dict_based_on_lastlevel_keys, suppress_last_key_in_per_actor_bills, \
     calc_microgrid_collective_metrics, calc_two_metrics_tradeoff_last_iter, calc_per_actor_bills, \
-    get_best_team_per_region, get_improvement_traj, set_on_off_peak_fare_vector
+    get_best_team_per_region, get_improvement_traj, set_on_off_peak_fare_vector, save_all_metrics_to_csv, \
+    save_per_region_score_to_csv
 from config import get_configs
 
 
@@ -255,17 +256,27 @@ class Manager:
         coord_method = "price_decomposition"
         regions_map_file = os.path.join(current_dir, "images", "pv_regions_no_names.png")
 
+        # get "improvement trajectory"
+        output_dir = os.path.join(current_dir, "run_synthesis")
+        os.makedirs(output_dir, exist_ok=True)
+        list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d-%H%M") \
+                             for elt in os.listdir(output_dir) \
+                             if (os.path.isdir(os.path.join(output_dir, elt)) and elt.startswith("run_"))]
+        scores_traj = get_improvement_traj(output_dir, list_of_run_dates,
+                                           list(team_scores))
+
         ppt_synthesis = PptSynthesis(result_dir=result_dir, date_of_run=date_of_run, idx_run=idx_run,
                                      optim_period=pd.date_range(dates[0], dates[-1], freq=f"{int(delta_t_s)}s"),
                                      coord_method=coord_method, regions_map_file=regions_map_file)
 
-        # get "improvement trajectory"
-        os.makedirs(os.path.join(current_dir, "run_synthesis"), exist_ok=True)
-        list_of_run_dates = [datetime.datetime.strptime(elt[4:], "%Y-%m-%d_%H%M") \
-                             for elt in os.listdir(os.path.join(current_dir, "run_synthesis")) \
-                             if (os.path.isdir(elt) and elt.startswith("run_"))]
-        scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
-                                           list(team_scores))
+        # save detailed results to a .csv file
+        metrics_not_saved = ["mg_transfo_aging", "n_disj"]
+
+        save_all_metrics_to_csv(per_actor_bills_internal, collective_metrics, coll_metrics_names,
+                                coll_metrics_weights, metrics_not_saved, ppt_synthesis.result_dir,
+                                date_of_run)
+        # and aggreg. per region .csv file
+        save_per_region_score_to_csv(team_scores, ppt_synthesis.result_dir, date_of_run)
 
         ppt_synthesis.create_summary_of_run_ppt(pv_prof=pv_prof, load_profiles=load_profiles,
                                                 microgrid_prof=microgrid_prof, microgrid_pmax=microgrid_pmax,
@@ -319,12 +330,16 @@ if __name__ == "__main__":
     pv_prof = None
 
     #teams = ['super_microgrid', 'les_grosses_sacoches', 'les_kssos', 'pir', 'microgrid_autonome', 'smart_grid']
-    teams = ['pir']
+    teams = ['reference', 'classico', 'Zoziflux']
+    team2dir = {'reference': 'agents'}
     for team in teams:
-        modSF = importlib.import_module(f'microgrid.agents.solar_farm_agent')
-        modCS = importlib.import_module(f'microgrid.agents.charging_station_agent')
-        modI = importlib.import_module(f'microgrid.agents.industrial_agent')
-        modDC = importlib.import_module(f'microgrid.agents.data_center_agent')
+        dir = team2dir.get(team, team)
+        if not os.path.isdir(dir):
+            print(f'skipping {team}: path {dir} not found in microgrid')
+        modSF = importlib.import_module(f'microgrid.{dir}.solar_farm_agent')
+        modCS = importlib.import_module(f'microgrid.{dir}.charging_station_agent')
+        modI = importlib.import_module(f'microgrid.{dir}.industrial_agent')
+        modDC = importlib.import_module(f'microgrid.{dir}.data_center_agent')
         agents = {
             'ferme': modSF.SolarFarmAgent(SolarFarmEnv(solar_farm_config=configs['solar_farm_config'], nb_pdt=N, delta_t=delta_t)),
             'evs': modCS.ChargingStationAgent(ChargingStationEnv(station_config=configs['station_config'], nb_pdt=N, delta_t=delta_t)),
@@ -337,6 +352,7 @@ if __name__ == "__main__":
                             simulation_horizon=datetime.timedelta(days=1),  # durée de la glissade
                             max_iterations=10, # nombre d'iterations de convergence des prix
                             )
+        print(f'running {team}')
         manager.run()
         #manager.plots()
         ld, dates, pv_prof = manager.generate_load_profile(team)
