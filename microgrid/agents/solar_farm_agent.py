@@ -41,11 +41,11 @@ class SolarFarmAgent:
         for t in range(self.nbr_future_time_slots):
             baseline_decision[t] = min(
                 pv_profile_forecast[t],
-                (self.battery_capacity - current_soc) / self.battery_efficiency,
+                (self.battery_capacity - current_soc) / (self.battery_efficiency * self.delta_t / datetime.timedelta(hours=1)),
                 self.battery_pmax
             )
             # update current value of SOC
-            current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1)
+            current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) * self.battery_capacity
         return baseline_decision
 
 
