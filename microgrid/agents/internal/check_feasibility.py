@@ -6,8 +6,6 @@ Created on Fri May 28 19:19:33 2021
 """
 
 # Check feasibility of different player loads
-# ATTENTION CONVENTION ARR/DEP pour la station de charge ; dans mon code les arr/dep
-# sont des pas de tps dans un modèle à tps discret ; dans les données d'entrée c'est en heures...
 import numpy as np
 from typing import Dict, List, Union
 from microgrid.assets.battery import Battery
@@ -17,6 +15,7 @@ from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.environments.charging_station.charging_station_env import ChargingStationEnv
 
 
+NUM_TOLERANCE_FEAS = 1E-4
 WRONG_FORMAT_SCORE = 1000
 PU_INFEAS_SCORE = 0.1
 DEFAULT_PU_INFEAS_SCORE = 0.01  # when 0 value is the one to be obtained, no relative deviation can be calc.
@@ -95,14 +94,14 @@ def calculate_infeas_score(n_infeas_check: int, infeas_list: List[float], n_defa
     return np.sum(infeas_list) / n_infeas_check * PU_INFEAS_SCORE + n_default_infeas * DEFAULT_PU_INFEAS_SCORE
 
 
-def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, charge_eff: float, discharge_eff: float,
-                                ev_arrival_times: List[int], delta_t_s: int) -> np.array:
+def calc_battery_soc_trajectory(init_soc: float, load_profile: np.array, charge_eff: float, discharge_eff: float,
+                                delta_t_s: int, ev_arrival_times: List[int] = None) -> np.array:
     """
-    Calculate EV state-of-charge trajectory
+    Calculate state-of-charge trajectory of a battery, that may be the one of an EV
 
     Args:
-        ev_init_soc: EV initial SOC
-        load_profile: load profile of this EV
+        init_soc: initial SOC
+        load_profile: load profile of this (EV) battery
         charge_eff: charging efficiency
         discharge_eff: discharging efficiency
         ev_arrival_times: time-slot index(ices) corresponding to EV arrival(s)
@@ -112,13 +111,14 @@ def calculate_ev_soc_trajectory(ev_init_soc: float, load_profile: np.array, char
         np.array: the EV SOC trajectory
     """
 
-    ev_batt_soc = ev_init_soc + (charge_eff * np.cumsum(np.maximum(load_profile, 0))
-                                 - 1 / discharge_eff * np.cumsum(np.maximum(-load_profile, 0))) * delta_t_s / 3600
+    batt_soc = init_soc + (charge_eff * np.cumsum(np.maximum(load_profile, 0))
+                           - 1 / discharge_eff * np.cumsum(np.maximum(-load_profile, 0))) * delta_t_s / 3600
     # diminish SoC when arriving at CS with E quantity consumed when driving
-    for arr_ts in ev_arrival_times:
-        ev_batt_soc[arr_ts:] -= 4
+    if ev_arrival_times is not None:
+        for arr_ts in ev_arrival_times:
+            batt_soc[arr_ts:] -= 4
 
-    return ev_batt_soc
+    return batt_soc
 
 
 def get_ev_arr_and_dep_ts(is_plugged: np.ndarray) -> (List[list], List[list]):
@@ -184,16 +184,16 @@ def check_data_center_feasibility(data_center_env: DataCenterEnv, load_profile: 
     max_load_check = np.maximum(load_profile[nonzero_it_load_ts] - prop_nonzero_it_load, 0) / prop_nonzero_it_load
     infeas_list.extend(list(max_load_check))
     n_infeas_check += len(prop_nonzero_it_load)
-    n_infeas_by_type["dc_max_p"] += len(np.where(max_load_check > 0)[0])
+    n_infeas_by_type["dc_max_p"] += len(np.where(max_load_check > 0 + NUM_TOLERANCE_FEAS)[0])
     min_load_check = np.maximum(-load_profile[nonzero_it_load_ts], 0)
     infeas_list.extend(list(min_load_check))
     n_infeas_check += len(prop_nonzero_it_load)
-    n_infeas_by_type["dc_min_p"] += len(np.where(min_load_check > 0)[0])
+    n_infeas_by_type["dc_min_p"] += len(np.where(min_load_check > 0 + NUM_TOLERANCE_FEAS)[0])
 
     n_default_infeas = 0
     # loop over ts with zero IT load
     for t in range(n_ts):
-        if t not in nonzero_it_load_ts and load_profile[t] > 0:
+        if t not in nonzero_it_load_ts and load_profile[t] > 0 + NUM_TOLERANCE_FEAS:
             n_default_infeas += 1
             n_infeas_check += 1
             n_infeas_by_type["dc_max_p"] += 1
@@ -259,7 +259,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         infeas_list.extend(indiv_max_power_check)
         n_infeas_check += n_ts
         # update infeas by type
-        n_infeas_by_type["ev_max_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+        n_infeas_by_type["ev_max_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
         # and store detailed infeasibilities
         detailed_infeas_list.extend([f"ev{i_ev}_indiv_max_p_t{t}"
                                      for t in range(n_ts) if indiv_max_power_check[t] > 0])
@@ -269,7 +269,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         infeas_list.extend(indiv_min_power_check)
         n_infeas_check += n_ts
         # update infeas by type
-        n_infeas_by_type["ev_min_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+        n_infeas_by_type["ev_min_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
         # and store detailed infeasibilities
         detailed_infeas_list.extend([f"ev{i_ev}_indiv_min_p_t{t}"
                                      for t in range(n_ts) if indiv_min_power_check[t] > 0])
@@ -279,7 +279,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
     for i_ev in range(n_ev):
         # list of time-slots for which EV i_ev is not plugged
         ts_not_plugged = list(np.where(is_plugged_forecast[i_ev, :] == 0)[0])
-        charge_when_plugged_check = np.where(np.abs(load_profile[i_ev, ts_not_plugged]) > 0)[0]
+        charge_when_plugged_check = np.where(np.abs(load_profile[i_ev, ts_not_plugged]) > 0 + NUM_TOLERANCE_FEAS)[0]
         n_charge_out_of_cs = len(charge_when_plugged_check)
         n_default_infeas += n_charge_out_of_cs
         # update infeas by type
@@ -295,20 +295,20 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
         ev_batt_capa = charging_station_env.evs[i_ev].battery.capacity
         charge_eff = charging_station_env.evs[i_ev].battery.efficiency
         current_batt_soc = \
-            calculate_ev_soc_trajectory(ev_init_soc=ev_init_soc, load_profile=load_profile[i_ev, :],
+            calc_battery_soc_trajectory(init_soc=ev_init_soc, load_profile=load_profile[i_ev, :],
                                         charge_eff=charge_eff, discharge_eff=charge_eff,
-                                        ev_arrival_times=t_ev_arr[i_ev], delta_t_s=delta_t_s)
+                                        delta_t_s=delta_t_s, ev_arrival_times=t_ev_arr[i_ev])
 
         # max bound (EV batt. capa)
         max_soc_check = list(np.maximum(current_batt_soc - ev_batt_capa, 0) / ev_batt_capa)
         infeas_list.extend(max_soc_check)
         n_infeas_check += n_ts
-        n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0.001)[0])
+        n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
         # and store detailed infeasibilities
         detailed_infeas_list.extend([f"ev{i_ev}_max_soc_t{t}" for t in range(n_ts) if max_soc_check[t] > 0])
 
         # min bound (0)
-        min_soc_check = np.where(current_batt_soc < 0)[0]
+        min_soc_check = np.where(current_batt_soc < 0 - NUM_TOLERANCE_FEAS)[0]
         n_soc_below_zero = len(min_soc_check)
         n_default_infeas += n_soc_below_zero
         n_infeas_by_type["soc_min_bound"] += n_soc_below_zero
@@ -317,7 +317,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
 
         # SoC at (potentially multiple) dep. is above the minimal level requested
         for t_dep in t_ev_dep[i_ev]:
-            if current_batt_soc[t_dep] < 0.25 * ev_batt_capa:
+            if current_batt_soc[t_dep] < 0.25 * ev_batt_capa - NUM_TOLERANCE_FEAS:
                 cs_dep_soc_penalty += dep_soc_penalty
                 n_infeas_by_type["min_soc_at_dep"] += 1
                 detailed_infeas_list.append(f"ev{i_ev}_min_soc_at_dep_t{t_ev_dep[i_ev]}")
@@ -329,7 +329,7 @@ def check_charging_station_feasibility(charging_station_env: ChargingStationEnv,
                                                        - cs_max_power, 0) / cs_max_power)
     infeas_list.extend(charging_station_max_power_check)
     n_infeas_check += n_ts
-    n_infeas_by_type["cs_max_power"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+    n_infeas_by_type["cs_max_power"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
     # and store detailed infeasibilities
     detailed_infeas_list.extend([f"station_max_p_t{t}" for t in range(n_ts)
                                  if charging_station_max_power_check[t] > 0])
@@ -354,26 +354,9 @@ def check_solar_farm_feasibility(solar_farm_env: SolarFarmEnv, load_profile: np.
     :param load_profile: vector with battery load
     :return: returns the infeasibility score
     """
-    n_ts = solar_farm_env.nb_pdt
-    delta_t_s = int(solar_farm_env.delta_t.total_seconds())
-    check_msg = {}
-
-    agent_type = "solar_farm"
-    type_and_size_check = \
-        check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
-    if any([check_status is False for check_status in type_and_size_check.values()]):
-        print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        check_msg["format"] = type_and_size_check
-        return check_msg, WRONG_FORMAT_SCORE
-    else:
-        check_msg["format"] = "ok"
-
-    # create Battery object
-    battery = Battery(capacity=solar_farm_env.battery.capacity, pmax=solar_farm_env.battery.pmax,
-                      efficiency=solar_farm_env.battery.efficiency)
-
-    return check_battery_load_profile_feasibility(agent_type=agent_type, load_profile=load_profile, battery=battery,
-                                                  n_ts=n_ts, delta_t_s=delta_t_s)
+    return check_battery_load_profile_feasibility(agent_type="solar_farm", load_profile=load_profile,
+                                                  battery=solar_farm_env.battery, n_ts=solar_farm_env.nb_pdt,
+                                                  delta_t_s=int(solar_farm_env.delta_t.total_seconds()))
 
 
 def check_industrial_site_feasibility(industrial_env: IndustrialEnv,
@@ -385,26 +368,9 @@ def check_industrial_site_feasibility(industrial_env: IndustrialEnv,
     :param load_profile: vector with battery load
     :return: returns the infeasibility score
     """
-    n_ts = industrial_env.nb_pdt
-    delta_t_s = int(industrial_env.delta_t.total_seconds())
-    check_msg = {}
-
-    agent_type = "industrial"
-    type_and_size_check = \
-        check_load_profile_type_and_size(agent_type=agent_type, load_profile=load_profile, n_ts=n_ts)
-    if any([check_status is False for check_status in type_and_size_check.values()]):
-        print(msg_error_type_and_size(agent_type=agent_type, n_ts=n_ts))
-        check_msg["format"] = type_and_size_check
-        return check_msg, WRONG_FORMAT_SCORE
-    else:
-        check_msg["format"] = "ok"
-
-    # create Battery object
-    battery = Battery(capacity=industrial_env.battery.capacity, pmax=industrial_env.battery.pmax,
-                      efficiency=industrial_env.battery.efficiency)
-
-    return check_battery_load_profile_feasibility(agent_type=agent_type, load_profile=load_profile, battery=battery,
-                                                  n_ts=n_ts, delta_t_s=delta_t_s)
+    return check_battery_load_profile_feasibility(agent_type="industrial", load_profile=load_profile,
+                                                  battery=industrial_env.battery, n_ts=industrial_env.nb_pdt,
+                                                  delta_t_s=int(industrial_env.delta_t.total_seconds()))
 
 
 def check_battery_load_profile_feasibility(agent_type: str, load_profile: np.ndarray, battery: Battery, n_ts: int,
@@ -439,16 +405,16 @@ def check_battery_load_profile_feasibility(agent_type: str, load_profile: np.nda
     infeas_list.extend(list(np.maximum(np.abs(load_profile) - battery.pmax, 0) / battery.pmax))
     n_infeas_check += n_ts
     # update infeas by type
-    n_infeas_by_type["batt_max_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+    n_infeas_by_type["batt_max_p"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
 
     # 2. that batt. SoC bounds are respected
-    batt_soc = (battery.efficiency * np.cumsum(np.maximum(load_profile, 0)) \
-                        - battery.efficiency * np.cumsum(np.maximum(-load_profile, 0))) \
-                                    * delta_t_s / 3600
+    batt_soc = \
+        calc_battery_soc_trajectory(init_soc=battery.soc, load_profile=load_profile, charge_eff=battery.efficiency,
+                                    discharge_eff=battery.efficiency, delta_t_s=delta_t_s)
     # max bound (batt. capa)
     infeas_list.extend(list(np.maximum(batt_soc - battery.capacity, 0) / battery.capacity))
     n_infeas_check += n_ts
-    n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0)[0])
+    n_infeas_by_type["soc_max_bound"] += len(np.where(np.array(infeas_list[-n_ts:]) > 0 + NUM_TOLERANCE_FEAS)[0])
     # min bound (0)
     n_soc_below_zero = len(np.where(batt_soc < 0)[0])
     n_default_infeas += n_soc_below_zero

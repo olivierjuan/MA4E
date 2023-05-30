@@ -24,7 +24,7 @@ class SolarFarmAgent:
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
-        if check_msg['infeas'] != 'ok':
+        if check_msg['format'] != 'ok' or check_msg['infeas'] != 'ok':
             print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
@@ -39,6 +39,7 @@ class SolarFarmAgent:
         pv_profile_forecast = pv_forecast
         # apply very simple policy
         baseline_decision = np.zeros(self.nbr_future_time_slots)
+        return baseline_decision
         for t in range(self.nbr_future_time_slots):
             baseline_decision[t] = min(
                 pv_profile_forecast[t],
