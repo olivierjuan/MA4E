@@ -4,8 +4,6 @@ from microgrid.agents.internal.check_feasibility import check_solar_farm_feasibi
 import numpy as np
 import matplotlib.pyplot as plt
 
-l = 20
-
 class SolarFarmAgent:
     def __init__(self, env: SolarFarmEnv):
         self.env = env
@@ -43,9 +41,11 @@ class SolarFarmAgent:
         baseline_decision = np.zeros(self.nbr_future_time_slots)
         #fonction de bénéfice
         B = 0
+        #moyenne du signal
+        l = np.mean(manager_signal)
         manager_signal2 = [20*np.sin(i/20)+40 for i in range(len(manager_signal))]
         for t in range(self.nbr_future_time_slots):
-            if manager_signal2[t] < l : # charge
+            if manager_signal[t] < l : # charge
                 baseline_decision[t] = min(
                     pv_profile_forecast[t],
                     (self.battery_capacity - current_soc) / (self.battery_efficiency * self.delta_t / datetime.timedelta(hours=1)),
@@ -54,19 +54,19 @@ class SolarFarmAgent:
                 # update current value of SOC
                 current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) * self.battery_efficiency
             else : # décharge = vente
-                baseline_decision[t] = - min(
-                    self.battery_pmax,
-                    current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1)) + 0.00001
-                )
+                if self.battery_pmax < (current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))) :
+                    baseline_decision[t] = - self.battery_pmax
+                    current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) / self.battery_efficiency + pv_profile_forecast[t]
+                else :
+                    baseline_decision[t] = - current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))
+                    current_soc = pv_profile_forecast[t]
                 # update profit
-                B += - manager_signal2[t] * baseline_decision[t]
-                # update current value of SOC
-                current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) / self.battery_efficiency + pv_profile_forecast[t]
-                if current_soc < 0:
-                    print('error')
+                B += - manager_signal[t] * baseline_decision[t]
+            if current_soc < 0:
+                print("error")
 
         #update profit at the end
-        B += manager_signal2[len(manager_signal)-1] * current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))
+        B += manager_signal[len(manager_signal)-1] * current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))
         return baseline_decision, B
 
 
@@ -111,6 +111,3 @@ if __name__ == "__main__":
         print("Info: {}".format(action.sum(axis=0)))
         print(B_hist)
         print(np.sum(B_hist))
-    X = [i for i in range(len(B_hist))]
-    plt.scatter(X,B_hist)
-    plt.show()

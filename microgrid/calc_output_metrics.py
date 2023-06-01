@@ -791,7 +791,7 @@ def get_improvement_traj(current_dir: str, list_of_run_dates: list, team_names: 
     # loop over run folders
     for run_date in list_of_run_dates:
         current_df = pd.read_csv(os.path.join(current_dir,
-                                              "run_%s" % run_date.strftime("%Y-%m-%d_%H%M"),
+                                              "run_%s" % run_date.strftime("%Y-%m-%d-%H%M"),
                                               "aggreg_per_region_res_run_%s.csv" \
                                               % run_date.strftime("%Y-%m-%d_%H%M")),
                                  sep=";", decimal=".")
