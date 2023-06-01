@@ -45,7 +45,7 @@ class SolarFarmAgent:
         l = np.mean(manager_signal)
         manager_signal2 = [20*np.sin(i/20)+40 for i in range(len(manager_signal))]
         for t in range(self.nbr_future_time_slots):
-            if manager_signal2[t] < l : # charge
+            if manager_signal[t] < l : # charge
                 baseline_decision[t] = min(
                     pv_profile_forecast[t],
                     (self.battery_capacity - current_soc) / (self.battery_efficiency * self.delta_t / datetime.timedelta(hours=1)),
