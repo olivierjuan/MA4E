@@ -47,7 +47,8 @@ class DataCenterAgent:
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision, consumption_forecast=consumption_forecast)
         # format or infeasiblity pb? Look at the check_msg
-        print(f"Format or infeas. errors: {check_msg}")
+        if check_msg['format'] != 'ok' or check_msg['infeas'] != 'ok':
+            print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
 

@@ -26,7 +26,8 @@ class ChargingStationAgent:
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision, is_plugged_forecast=is_plugged_prevision)
         # format or infeasiblity pb? Look at the check_msg
-        print(f"Format or infeas. errors: {check_msg}")
+        if check_msg['format'] != 'ok' or check_msg['infeas'] != 'ok':
+            print(f"Format or infeas. errors: {check_msg}")
 
         return baseline_decision
 
