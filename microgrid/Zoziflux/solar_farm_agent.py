@@ -28,6 +28,12 @@ class SolarFarmAgent:
 
         return baseline_decision
 
+    def update_soc(decision,current_soc,rho,DT):
+        if decision > 0 :
+            current_soc += decision * rho * DT
+        else :
+            current_soc += decision / rho * DT
+
     def take_baseline_decision(self,
                                manager_signal: np.ndarray,  # in R^nbr_future_time_slots
                                soc: float,                  # in [0, battery_capacity]
@@ -46,6 +52,11 @@ class SolarFarmAgent:
         manager_signal2 = [20*np.sin(i/20)+40 for i in range(len(manager_signal))]
         rho = self.battery_efficiency
         DT = self.delta_t / datetime.timedelta(hours=1)
+        def update_soc(decision, current_soc):
+            if decision > 0:
+                current_soc += decision * rho * DT
+            else:
+                current_soc += decision / rho * DT
         for t in range(self.nbr_future_time_slots):
             if manager_signal[t] < l : # charge
                 baseline_decision[t] = min(
@@ -56,14 +67,14 @@ class SolarFarmAgent:
                 # update current value of SOC
                 current_soc += baseline_decision[t] * rho * DT
             else : # décharge = vente
-                if self.battery_pmax < (current_soc / (rho * DT)) :
+                if self.battery_pmax < (current_soc * rho / DT) :
                     baseline_decision[t] = - self.battery_pmax
-                    current_soc = max(min(current_soc + baseline_decision[t] * DT * rho + pv_profile_forecast[t],self.battery_capacity),0)
                 else :
-                    baseline_decision[t] = - current_soc / (rho * DT)
-                    current_soc = max(min(pv_profile_forecast[t], self.battery_capacity),0)
+                    baseline_decision[t] = - current_soc * rho / DT
                 # update profit
                 #B += - manager_signal[t] * baseline_decision[t]
+            #update soc
+            update_soc(baseline_decision[t],current_soc)
             if current_soc < 0:
                 print("error")
 
