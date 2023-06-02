@@ -72,6 +72,11 @@ class DataCenterAgent:
 
         return baseline_decision
 
+    def take_my_decision(self,
+                        manager_signal: np.ndarray,  # in R^nbr_future_time_slots
+                        hotwater_price_forecast: np.ndarray):   # in R+^nbr_future_time_slots) -> np.ndarray:
+
+
     def check_decision(self, load_profile, consumption_forecast):
         check_msg, check_score = check_data_center_feasibility(data_center_env=self.env, load_profile=load_profile,
                                                                it_load_profile=consumption_forecast)
