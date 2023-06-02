@@ -104,7 +104,8 @@ def set_to_multiple_scenarios_format(dict_wo_scenarios: dict, fixed_scenario: tu
 class PptSynthesis():
     def __init__(self, result_dir: str, date_of_run: datetime.datetime, idx_run: int, optim_period: pd.date_range,
                  coord_method: str, regions_map_file: str):
-        self.result_dir = result_dir
+        self.result_dir = os.path.join(result_dir, f'run_{date_of_run:%Y-%m-%d-%H%M}')
+        os.makedirs(self.result_dir, exist_ok=True)
         self.date_of_run = date_of_run
         self.idx_run = idx_run
         self.optim_period = optim_period
@@ -411,13 +412,13 @@ class PptSynthesis():
             print("No slide for score improvement, because unique run available for now")
         else:
             slide, shapes, title_shape = \
-                init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX, f"All teams score traj. with {coord_method}",
+                init_img_plus_title_slide(self.prs, IMG_SLIDE_LAYOUT_IDX, f"All teams score traj. with {self.coord_method}",
                                           FONT_STYLE["name"], FONT_STYLE["size"], FONT_STYLE["bold"], FONT_STYLE["italic"],
                                           TEXT_VERTICAL_ALIGN)
 
             # plot and save
-            all_teams_score_traj_file = os.path.join(result_dir,
-                                                     f"all_teams_score_traj_to_run_{date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
+            all_teams_score_traj_file = os.path.join(self.result_dir,
+                                                     f"all_teams_score_traj_to_run_{self.date_of_run.strftime(FILE_DATE_FORMAT)}.{IMG_FORMAT}")
 
             plot_all_teams_score_traj(scores_traj, all_teams_score_traj_file.split(".")[0])
 

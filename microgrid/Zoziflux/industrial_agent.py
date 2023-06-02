@@ -1,9 +1,7 @@
 import datetime
-
 from microgrid.environments.industrial.industrial_env import IndustrialEnv
 from microgrid.agents.internal.check_feasibility import check_industrial_site_feasibility
 import numpy as np
-from pulp import *
 
 
 class IndustrialAgent:
@@ -21,43 +19,13 @@ class IndustrialAgent:
                       soc: float,                        # in [0, battery_capacity]
                       consumption_forecast: np.ndarray   # in R+^nbr_future_time_slots
                       ) -> np.ndarray:                   # in R^nbr_future_time_slots (battery power profile)
-
-        L = len(manager_signal)
-        temps = [i for i in range(L)]
-
-
-        # On minimize le coût
-        cost = LpProblem("Optimisation", LpMinimize)
-
-        #Variables
-        current_soc = np.transpose([LpVariable(f"current_soc_{i+1}", 0, self.battery_capacity) for i in temps])
-        buy = np.transpose([LpVariable(f"achat_{i+1}", 0, self.battery_pmax) for i in temps])
-        sell = np.transpose([LpVariable(f"vente_{i+1}", -self.battery_pmax, 0) for i in temps])
-
-        #Contraintes
-        cost += (current_soc[0] == soc)
-        cost += (buy[0] == 0)
-        for t in range(1,L):
-            cost += (current_soc[t] == current_soc[t-1] + (sell[t] * (1/self.battery_efficiency) + buy[t]*self.battery_efficiency) * self.delta_t / datetime.timedelta(hours=1))
-            cost += (buy[t] <= (self.battery_capacity - current_soc[t]) / self.battery_efficiency)
-            cost += (sell[t] >= -current_soc[t] * self.battery_efficiency)
-
-        #Définition du coût
-        cost += lpSum((buy[t] + sell[t])*manager_signal[t] for t in temps)
-
-        #Résolution
-        cost.solve()
-
-        #Récupération de l'action à chaque pas de temps
-        decision = np.array([b.value() for b in buy])
-
+        baseline_decision = self.take_baseline_decision(soc=soc, manager_signal=manager_signal)
         # use format and feasibility "checker"
-        check_msg = self.check_decision(load_profile=decision)
+        check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
-        if check_msg['format'] != 'ok' or check_msg['infeas'] != 'ok':
-            print(f"Format or infeas. errors: {check_msg}")
+        print(f"Format or infeas. errors: {check_msg}")
 
-        return decision
+        return baseline_decision
 
     def take_baseline_decision(self,
                                soc: float,                 # in [0, battery_capacity]
@@ -88,7 +56,7 @@ class IndustrialAgent:
                 current_decision = min(current_decision,
                                        (self.battery_capacity - current_soc) / self.battery_efficiency)
             if current_decision < 0:  # with battery soc=0 state when discharging
-                current_decision = max(current_decision, -current_soc * self.battery_efficiency)
+                current_decision = max(current_decision, current_soc * self.battery_efficiency)
             baseline_decision[t] = current_decision
             # update current value of SOC
             current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1)
