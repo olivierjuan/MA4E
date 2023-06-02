@@ -61,7 +61,7 @@ class SolarFarmAgent:
             else : # décharge = vente
                 baseline_decision[t] = - min(
                     self.battery_pmax,
-                    current_soc * rho / DT
+                    current_soc * rho / DT,
                 )
                 # update profit
                 #B += - manager_signal[t] * baseline_decision[t]
