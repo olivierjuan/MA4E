@@ -20,13 +20,13 @@ class SolarFarmAgent:
                       soc: float,                  # in [0, battery_capacity]
                       pv_forecast: np.ndarray      # in R+^nbr_future_time_slots
                       ) -> np.ndarray:             # in R^nbr_future_time_slots (battery power profile)
-        baseline_decision, B = self.take_baseline_decision(soc=soc, pv_forecast=pv_forecast, manager_signal=manager_signal)
+        baseline_decision= self.take_baseline_decision(soc=soc, pv_forecast=pv_forecast, manager_signal=manager_signal)
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=baseline_decision)
         # format or infeasiblity pb? Look at the check_msg
         print(f"Format or infeas. errors: {check_msg}")
 
-        return baseline_decision, B
+        return baseline_decision
 
     def take_baseline_decision(self,
                                manager_signal: np.ndarray,  # in R^nbr_future_time_slots
@@ -40,7 +40,7 @@ class SolarFarmAgent:
         # apply very simple policy
         baseline_decision = np.zeros(self.nbr_future_time_slots)
         #fonction de bénéfice
-        B = 0
+        #B = 0
         #moyenne du signal
         l = np.mean(manager_signal)
         manager_signal2 = [20*np.sin(i/20)+40 for i in range(len(manager_signal))]
@@ -58,18 +58,18 @@ class SolarFarmAgent:
             else : # décharge = vente
                 if self.battery_pmax < (current_soc / (rho * DT)) :
                     baseline_decision[t] = - self.battery_pmax
-                    current_soc += min(baseline_decision[t] * DT * rho + pv_profile_forecast[t],self.battery_capacity)
+                    current_soc = max(min(current_soc + baseline_decision[t] * DT * rho + pv_profile_forecast[t],self.battery_capacity),0)
                 else :
                     baseline_decision[t] = - current_soc / (rho * DT)
-                    current_soc = min(pv_profile_forecast[t], self.battery_capacity)
+                    current_soc = max(min(pv_profile_forecast[t], self.battery_capacity),0)
                 # update profit
-                B += - manager_signal[t] * baseline_decision[t]
+                #B += - manager_signal[t] * baseline_decision[t]
             if current_soc < 0:
                 print("error")
 
         #update profit at the end
-        B += manager_signal[len(manager_signal)-1] * current_soc * rho / DT
-        return baseline_decision, B
+        #B += manager_signal[len(manager_signal)-1] * current_soc * rho / DT
+        return baseline_decision
 
 
     def check_decision(self, load_profile) -> dict:
@@ -102,8 +102,8 @@ if __name__ == "__main__":
     state = env.reset(now, delta_t)
     B_hist = []
     for i in range(N*2):
-        action, B = agent.take_decision(**state)
-        B_hist.append(B)
+        action = agent.take_decision(**state)
+        #B_hist.append(B)
         state, reward, done, info = env.step(action)
         cumulative_reward += reward
         if done:
@@ -111,5 +111,5 @@ if __name__ == "__main__":
         print(f"action: {action}, reward: {reward}, cumulative reward: {cumulative_reward}")
         print("State: {}".format(state))
         print("Info: {}".format(action.sum(axis=0)))
-        print(B_hist)
-        print(np.sum(B_hist))
+        #print(B_hist)
+        #print(np.sum(B_hist))
