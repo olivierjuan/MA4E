@@ -67,9 +67,6 @@ class SolarFarmAgent:
                 #B += - manager_signal[t] * baseline_decision[t]
             #update soc
             update_soc(baseline_decision[t],current_soc)
-            if current_soc < 0:
-                print("error")
-
         #update profit at the end
         #B += manager_signal[len(manager_signal)-1] * current_soc * rho / DT
         return baseline_decision
