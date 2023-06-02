@@ -44,29 +44,31 @@ class SolarFarmAgent:
         #moyenne du signal
         l = np.mean(manager_signal)
         manager_signal2 = [20*np.sin(i/20)+40 for i in range(len(manager_signal))]
+        rho = self.battery_efficiency
+        DT = self.delta_t / datetime.timedelta(hours=1)
         for t in range(self.nbr_future_time_slots):
             if manager_signal[t] < l : # charge
                 baseline_decision[t] = min(
                     pv_profile_forecast[t],
-                    (self.battery_capacity - current_soc) / (self.battery_efficiency * self.delta_t / datetime.timedelta(hours=1)),
+                    (self.battery_capacity - current_soc) / (rho * DT),
                     self.battery_pmax
                 )
                 # update current value of SOC
-                current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) * self.battery_efficiency
+                current_soc += baseline_decision[t] * rho * DT
             else : # décharge = vente
-                if self.battery_pmax < (current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))) :
+                if self.battery_pmax < (current_soc / (rho * DT)) :
                     baseline_decision[t] = - self.battery_pmax
-                    current_soc += baseline_decision[t] * self.delta_t / datetime.timedelta(hours=1) / self.battery_efficiency + pv_profile_forecast[t]
+                    current_soc += min(baseline_decision[t] * DT * rho + pv_profile_forecast[t],self.battery_capacity)
                 else :
-                    baseline_decision[t] = - current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))
-                    current_soc = pv_profile_forecast[t]
+                    baseline_decision[t] = - current_soc / (rho * DT)
+                    current_soc = min(pv_profile_forecast[t], self.battery_capacity)
                 # update profit
                 B += - manager_signal[t] * baseline_decision[t]
             if current_soc < 0:
                 print("error")
 
         #update profit at the end
-        B += manager_signal[len(manager_signal)-1] * current_soc * self.battery_efficiency / (self.delta_t / datetime.timedelta(hours=1))
+        B += manager_signal[len(manager_signal)-1] * current_soc * rho / DT
         return baseline_decision, B
 
 
