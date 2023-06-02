@@ -28,12 +28,6 @@ class SolarFarmAgent:
 
         return baseline_decision
 
-    def update_soc(decision,current_soc,rho,DT):
-        if decision > 0 :
-            current_soc += decision * rho * DT
-        else :
-            current_soc += decision / rho * DT
-
     def take_baseline_decision(self,
                                manager_signal: np.ndarray,  # in R^nbr_future_time_slots
                                soc: float,                  # in [0, battery_capacity]
