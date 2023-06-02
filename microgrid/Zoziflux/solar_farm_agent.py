@@ -64,8 +64,6 @@ class SolarFarmAgent:
                     (self.battery_capacity - current_soc) / (rho * DT),
                     self.battery_pmax
                 )
-                # update current value of SOC
-                current_soc += baseline_decision[t] * rho * DT
             else : # décharge = vente
                 if self.battery_pmax < (current_soc * rho / DT) :
                     baseline_decision[t] = - self.battery_pmax
