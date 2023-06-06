@@ -36,9 +36,11 @@ class IndustrialAgent:
 
         #Contraintes
         cost += (current_soc[0] == soc)
-        cost += (buy[0] == 0)
+        cost += (buy[L-1] == 0)
+        cost += (sell[L-1] == 0)
         for t in range(1,L):
-            cost += (current_soc[t] == current_soc[t-1] + (sell[t] * (1/self.battery_efficiency) + buy[t]*self.battery_efficiency) * self.delta_t / datetime.timedelta(hours=1))
+            cost += (current_soc[t] == current_soc[t-1] + (sell[t-1] * (1/self.battery_efficiency) + buy[t-1]*self.battery_efficiency) * self.delta_t / datetime.timedelta(hours=1))
+        for t in temps:
             cost += (buy[t] <= (self.battery_capacity - current_soc[t]) / self.battery_efficiency)
             cost += (sell[t] >= -current_soc[t] * self.battery_efficiency)
 
@@ -49,7 +51,7 @@ class IndustrialAgent:
         cost.solve()
 
         #Récupération de l'action à chaque pas de temps
-        decision = np.array([b.value() for b in buy])
+        decision = np.array([buy[t].value() + sell[t].value() for t in temps])
 
         # use format and feasibility "checker"
         check_msg = self.check_decision(load_profile=decision)
